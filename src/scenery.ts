@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mulberry32, randRange } from "./rng";
-import { GARDEN, type BasinState, type MossState } from "./types";
+import { GARDEN, type BasinState, type LanternState, type MossState } from "./types";
 
 export function createGround(): THREE.Mesh {
   const mat = new THREE.MeshStandardMaterial({
@@ -125,6 +125,74 @@ export function createBasin(state: BasinState): THREE.Group {
   water.userData.water = true;
   group.add(water);
 
+  const koiColors = [0xc45a32, 0xf2efe6];
+  for (let i = 0; i < 2; i++) {
+    const koi = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 8, 6),
+      new THREE.MeshStandardMaterial({ color: koiColors[i], roughness: 0.35 }),
+    );
+    koi.scale.set(2.1, 0.55, 0.75);
+    koi.position.y = 0.452;
+    koi.userData.kind = "basin";
+    koi.userData.koi = { angle: i * Math.PI, speed: 0.55 + i * 0.12, radius: 0.14 + i * 0.04 };
+    group.add(koi);
+  }
+
+  return group;
+}
+
+export function createLantern(state: LanternState): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(state.x, GARDEN.sandY, state.z);
+  group.rotation.y = state.rotY;
+  group.userData.kind = "lantern";
+  group.userData.id = state.id;
+
+  const stone = new THREE.MeshStandardMaterial({
+    color: 0x5e5a54,
+    roughness: 0.86,
+    flatShading: true,
+  });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.34), stone);
+  base.position.y = 0.06;
+  base.castShadow = true;
+  base.userData.kind = "lantern";
+  group.add(base);
+
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.32, 0.11), stone);
+  shaft.position.y = 0.26;
+  shaft.castShadow = true;
+  shaft.userData.kind = "lantern";
+  group.add(shaft);
+
+  const glowMat = new THREE.MeshStandardMaterial({
+    color: 0xf0c878,
+    emissive: 0xc4893a,
+    emissiveIntensity: 0.7,
+    roughness: 0.4,
+  });
+  const chamber = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.2), glowMat);
+  chamber.position.y = 0.48;
+  chamber.userData.kind = "lantern";
+  chamber.userData.lanternGlow = true;
+  group.add(chamber);
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.14, 4), stone);
+  roof.position.y = 0.62;
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  roof.userData.kind = "lantern";
+  group.add(roof);
+
+  const light = new THREE.PointLight(0xffc878, 0.55, 4.8, 2);
+  light.position.y = 0.5;
+  group.add(light);
+  return group;
+}
+
+export function createLanterns(states: LanternState[]): THREE.Group {
+  const group = new THREE.Group();
+  for (const s of states) group.add(createLantern(s));
   return group;
 }
 
@@ -154,6 +222,25 @@ export function updateWater(group: THREE.Group, time: number): void {
       const mat = obj.material as THREE.MeshPhysicalMaterial;
       const pulse = 0.5 + Math.sin(time * 0.7) * 0.08;
       mat.color.setRGB(0.22 + pulse * 0.05, 0.32 + pulse * 0.06, 0.34 + pulse * 0.04);
+    }
+    if (obj instanceof THREE.Mesh && obj.userData.koi) {
+      const k = obj.userData.koi as { angle: number; speed: number; radius: number };
+      k.angle += k.speed * 0.016;
+      obj.position.x = Math.cos(k.angle) * k.radius;
+      obj.position.z = Math.sin(k.angle) * k.radius;
+      obj.rotation.y = -k.angle;
+    }
+  });
+}
+
+export function updateLanterns(group: THREE.Group, time: number): void {
+  group.traverse((obj: THREE.Object3D) => {
+    if (obj instanceof THREE.Mesh && obj.userData.lanternGlow) {
+      const mat = obj.material as THREE.MeshStandardMaterial;
+      mat.emissiveIntensity = 0.55 + Math.sin(time * 1.6) * 0.12;
+    }
+    if (obj instanceof THREE.PointLight) {
+      obj.intensity = 0.48 + Math.sin(time * 1.6) * 0.08;
     }
   });
 }

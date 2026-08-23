@@ -128,5 +128,42 @@ test.describe("Zen Garden", () => {
     await page.getByTestId("tool-prune").click();
     await expect(toolbar).toHaveAttribute("data-tool-active", "prune");
     await expect(page.getByTestId("garden-canvas")).toBeVisible();
+    await expect(page.getByTestId("season")).toBeVisible();
+  });
+
+  test("lanterns, season, and watering are visible and persist", async ({ page }) => {
+    await page.goto("/");
+    await waitForGarden(page);
+
+    const start = await page.evaluate(() => ({
+      lanterns: window.__ZEN_GARDEN__!.getLanternCount(),
+      foliage: window.__ZEN_GARDEN__!.getFoliageCount(),
+      season: window.__ZEN_GARDEN__!.getSeason(),
+    }));
+    expect(start.lanterns).toBeGreaterThan(0);
+    expect(start.foliage).toBeGreaterThan(5);
+    expect(["spring", "summer", "autumn", "winter"]).toContain(start.season);
+    await expect(page.getByTestId("season")).toHaveAttribute("data-season", start.season);
+
+    await page.getByTestId("tool-water").click();
+    const afterWater = await page.evaluate(() => {
+      let season = window.__ZEN_GARDEN__!.getSeason();
+      for (let i = 0; i < 3; i++) season = window.__ZEN_GARDEN__!.waterBonsai();
+      return {
+        season,
+        lanterns: window.__ZEN_GARDEN__!.getLanternCount(),
+      };
+    });
+    expect(afterWater.season).toBe("summer");
+    await expect(page.getByTestId("season")).toHaveAttribute("data-season", "summer");
+
+    await page.reload();
+    await waitForGarden(page);
+    const restored = await page.evaluate(() => ({
+      season: window.__ZEN_GARDEN__!.getSeason(),
+      lanterns: window.__ZEN_GARDEN__!.getLanternCount(),
+    }));
+    expect(restored.season).toBe("summer");
+    expect(restored.lanterns).toBe(afterWater.lanterns);
   });
 });

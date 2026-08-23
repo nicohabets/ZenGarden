@@ -1,4 +1,4 @@
-import { TOOL_HINTS, type ToolId } from "./types";
+import { SEASON_LABEL, TOOL_HINTS, type Season, type ToolId } from "./types";
 
 export class GardenUI {
   readonly toolbar: HTMLElement;
@@ -9,6 +9,7 @@ export class GardenUI {
   readonly keepBtn: HTMLButtonElement;
   readonly beginBtn: HTMLButtonElement;
   readonly seedLabel: HTMLElement;
+  readonly seasonLabel: HTMLElement;
   readonly saved: HTMLElement;
   readonly loading: HTMLElement;
   readonly app: HTMLElement;
@@ -24,6 +25,7 @@ export class GardenUI {
     this.keepBtn = must<HTMLButtonElement>("#btn-keep");
     this.beginBtn = must<HTMLButtonElement>("#btn-begin");
     this.seedLabel = must("#seed-label");
+    this.seasonLabel = must("#season");
     this.saved = must("#saved");
     this.loading = must("#loading");
   }
@@ -46,6 +48,12 @@ export class GardenUI {
   setSeed(seed: number): void {
     this.app.dataset.seed = String(seed);
     this.seedLabel.textContent = `seed ${seed}`;
+  }
+
+  setSeason(season: Season): void {
+    this.seasonLabel.dataset.season = season;
+    this.seasonLabel.textContent = SEASON_LABEL[season];
+    this.app.dataset.season = season;
   }
 
   setReady(ok: boolean, webgl: boolean): void {

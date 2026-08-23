@@ -74,12 +74,25 @@ body {
   z-index: 3;
 }
 
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 h1 {
   margin: 0;
-  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  font-size: clamp(1.15rem, 2.6vw, 1.5rem);
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   text-transform: lowercase;
+}
+
+.season {
+  font-size: 1.05rem;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+  opacity: 0.7;
 }
 
 .top-actions {
@@ -133,14 +146,15 @@ h1 {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(108px + env(safe-area-inset-bottom));
+  bottom: calc(104px + env(safe-area-inset-bottom));
   margin: 0;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: var(--card);
+  background: transparent;
   color: var(--ink-soft);
-  font-size: 0.86rem;
-  letter-spacing: 0.02em;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  opacity: 0.72;
   z-index: 3;
 }
 
@@ -171,7 +185,7 @@ h1 {
   border-radius: 28px;
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  box-shadow: 0 8px 24px rgba(40, 34, 24, 0.08);
   backdrop-filter: blur(14px);
   z-index: 4;
 }
@@ -273,9 +287,12 @@ h1 {
   color: #f4eee2;
 }
 
+.mute-label {
+  display: none;
+}
+
 @media (max-width: 720px) {
-  .seed,
-  .mute-label {
+  .seed {
     display: none;
   }
 

@@ -1,5 +1,5 @@
 import { dist2, mulberry32, randRange, randInt } from "./rng";
-import { GARDEN, type BasinState, type BonsaiState, type GeneratedWorld, type MossState, type StoneState } from "./types";
+import { GARDEN, type BasinState, type BonsaiState, type GeneratedWorld, type LanternState, type MossState, type StoneState } from "./types";
 
 interface Point {
   x: number;
@@ -29,6 +29,19 @@ export function generateWorld(seed: number): GeneratedWorld {
   bonsai.x = bonsaiPos.x;
   bonsai.z = bonsaiPos.z;
   occupied.push({ p: bonsaiPos, r: 1.05 });
+
+  const lanternCount = rng() > 0.35 ? 2 : 1;
+  const lanterns: LanternState[] = [];
+  for (let i = 0; i < lanternCount; i++) {
+    const p = place(rng, occupied, 0.7, 1.35);
+    lanterns.push({
+      id: `lantern-${i}`,
+      x: p.x,
+      z: p.z,
+      rotY: rng() * Math.PI * 2,
+    });
+    occupied.push({ p, r: 0.55 });
+  }
 
   const stoneCount = randInt(rng, 5, 9);
   const stones: StoneState[] = [];
@@ -70,7 +83,7 @@ export function generateWorld(seed: number): GeneratedWorld {
     });
   }
 
-  return { seed, stones, moss, basin, bonsai };
+  return { seed, stones, moss, basin, bonsai, lanterns };
 }
 
 export function nextStoneId(stones: StoneState[]): string {
