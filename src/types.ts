@@ -1,4 +1,5 @@
 export type ToolId = "rake" | "stone" | "water" | "prune" | "place";
+export type Season = "spring" | "summer" | "autumn" | "winter";
 
 export interface StoneState {
   id: string;
@@ -18,6 +19,13 @@ export interface MossState {
 }
 
 export interface BasinState {
+  x: number;
+  z: number;
+  rotY: number;
+}
+
+export interface LanternState {
+  id: string;
   x: number;
   z: number;
   rotY: number;
@@ -49,6 +57,7 @@ export interface GardenSave {
   moss: MossState[];
   basin: BasinState;
   bonsai: BonsaiState;
+  lanterns?: LanternState[];
   camera: CameraState;
 }
 
@@ -58,6 +67,7 @@ export interface GeneratedWorld {
   moss: MossState[];
   basin: BasinState;
   bonsai: BonsaiState;
+  lanterns: LanternState[];
 }
 
 export interface Blocker {
@@ -75,6 +85,10 @@ export interface ZenGardenAPI {
   placeStoneAt(x: number, z: number): boolean;
   getSave(): GardenSave | null;
   newGarden(): void;
+  getSeason(): Season;
+  getLanternCount(): number;
+  getFoliageCount(): number;
+  waterBonsai(): Season;
 }
 
 export const GARDEN = {
@@ -89,7 +103,22 @@ export const MUTE_KEY = "zengarden.muted";
 export const TOOL_HINTS: Record<ToolId, string> = {
   rake: "Draw grooves through the sand",
   stone: "Tap empty sand to place · drag a stone to move",
-  water: "Water the bonsai",
+  water: "Water the bonsai — it grows, and the season turns",
   prune: "Tap foliage to prune",
   place: "Drag the bonsai pot to a new resting place",
 };
+
+export const SEASON_LABEL: Record<Season, string> = {
+  spring: "春",
+  summer: "夏",
+  autumn: "秋",
+  winter: "冬",
+};
+
+export function seasonFromBonsai(b: BonsaiState, now = Date.now()): Season {
+  const hours = Math.max(0, (now - b.lastWatered) / 3_600_000);
+  if (hours >= 36) return "winter";
+  if (hours >= 10) return "autumn";
+  if (b.wateredCount >= 3) return "summer";
+  return "spring";
+}
