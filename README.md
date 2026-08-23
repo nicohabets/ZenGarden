@@ -14,6 +14,8 @@ Open the site and the garden is ready.
 | Zoom | Scroll wheel | Pinch |
 | Tools | Toolbar, or keys `1`–`5` | Large toolbar buttons |
 
+Atmosphere: stone lanterns with a warm glow, koi in the basin, wind in the bonsai, falling petals after watering, and a season mark (春夏秋冬) that turns with care.
+
 Tools:
 
 - **Rake** — draw grooves in the sand

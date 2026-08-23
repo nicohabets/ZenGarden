@@ -32,9 +32,9 @@ export class SandField {
     const mat = new THREE.MeshStandardMaterial({
       map: this.texture,
       bumpMap: this.texture,
-      bumpScale: 0.42,
+      bumpScale: 0.58,
       displacementMap: this.texture,
-      displacementScale: 0.055,
+      displacementScale: 0.078,
       roughness: 0.94,
       metalness: 0.02,
       color: 0xf3e6c8,
@@ -85,31 +85,37 @@ export class SandField {
 
     const nx = -dy / len;
     const ny = dx / len;
-    const tines = 5;
-    const spacing = 5.1;
+    const tines = 7;
+    const spacing = 4.35;
     const ctx = this.ctx;
+    const wave = 1.15;
 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
+    const stroke = (ox: number, oy: number, width: number, color: string, wobble: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      const steps = Math.max(2, Math.ceil(len / 6));
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const px = a.u + dx * t + ox + nx * Math.sin(t * Math.PI * 2 + len) * wobble;
+        const py = a.v + dy * t + oy + ny * Math.sin(t * Math.PI * 2 + len) * wobble;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    };
+
     for (let t = 0; t < tines; t++) {
-      const off = (t - (tines - 1) / 2) * spacing;
+      const center = (tines - 1) / 2;
+      const off = (t - center) * spacing;
+      const depth = 1 - Math.abs(t - center) / (center + 0.01);
       const ox = nx * off;
       const oy = ny * off;
-
-      ctx.strokeStyle = "rgba(72, 58, 36, 0.28)";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.moveTo(a.u + ox, a.v + oy);
-      ctx.lineTo(b.u + ox, b.v + oy);
-      ctx.stroke();
-
-      ctx.strokeStyle = "rgba(255, 246, 220, 0.2)";
-      ctx.lineWidth = 1.05;
-      ctx.beginPath();
-      ctx.moveTo(a.u + ox + nx * 1.4, a.v + oy + ny * 1.4);
-      ctx.lineTo(b.u + ox + nx * 1.4, b.v + oy + ny * 1.4);
-      ctx.stroke();
+      stroke(ox, oy, 1.6 + depth * 1.8, `rgba(68, 52, 32, ${0.16 + depth * 0.2})`, wave);
+      stroke(ox + nx * 1.6, oy + ny * 1.6, 1.05, `rgba(255, 246, 220, ${0.1 + depth * 0.16})`, wave * 0.6);
     }
     this.markDirty();
   }
@@ -120,16 +126,16 @@ export class SandField {
     const gap = (tineGap / GARDEN.width) * TEX_W;
     const ctx = this.ctx;
     ctx.lineCap = "round";
-    for (let r = gap * 2; r < maxR; r += gap * 2.1) {
-      ctx.strokeStyle = "rgba(70, 56, 34, 0.22)";
-      ctx.lineWidth = 2.2;
+    for (let r = gap * 1.6; r < maxR; r += gap * 1.85) {
+      ctx.strokeStyle = "rgba(70, 56, 34, 0.24)";
+      ctx.lineWidth = 2.4;
       ctx.beginPath();
       ctx.arc(c.u, c.v, r, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.strokeStyle = "rgba(255, 246, 220, 0.14)";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 246, 220, 0.16)";
+      ctx.lineWidth = 1.15;
       ctx.beginPath();
-      ctx.arc(c.u, c.v, r + 1.6, 0, Math.PI * 2);
+      ctx.arc(c.u, c.v, r + 1.8, 0, Math.PI * 2);
       ctx.stroke();
     }
     this.markDirty();

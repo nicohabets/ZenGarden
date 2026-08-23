@@ -10,16 +10,20 @@ import {
   createBasin,
   createFrame,
   createGround,
+  createLanterns,
   createMoss,
   scatterGravel,
+  updateLanterns,
   updateWater,
 } from "./scenery";
 import { StoneField } from "./stones";
 import {
+  seasonFromBonsai,
   type BasinState,
   type Blocker,
   type BonsaiState,
   type GardenSave,
+  type LanternState,
   type MossState,
   type StoneState,
   type ToolId,
@@ -57,9 +61,11 @@ export class ZenGarden {
   private bonsaiState!: BonsaiState;
   private basinState!: BasinState;
   private mossStates: MossState[] = [];
+  private lanternStates: LanternState[] = [];
   private mossGroup: THREE.Group | null = null;
   private basinGroup: THREE.Group | null = null;
   private gravelGroup: THREE.Group | null = null;
+  private lanternGroup: THREE.Group | null = null;
   private waterTime = 0;
 
   private mode: "idle" | "rake" | "orbit" | "pan" | "pinch" | "drag-stone" | "drag-bonsai" = "idle";
@@ -86,8 +92,8 @@ export class ZenGarden {
     this.renderer.toneMappingExposure = 1.08;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.background = new THREE.Color(0xe6dfd1);
-    this.scene.fog = new THREE.Fog(0xe6dfd1, 18, 42);
+    this.scene.background = new THREE.Color(0xe3d6c2);
+    this.scene.fog = new THREE.Fog(0xe3d6c2, 12, 32);
 
     this.audio = new AmbientAudio(loadMuted());
     this.sand = new SandField();
@@ -116,6 +122,7 @@ export class ZenGarden {
     this.ui.setMuted(this.audio.muted);
     this.ui.setTool(this.tool);
     this.ui.setSeed(this.seed);
+    this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
     this.resize();
     this.renderer.render(this.scene, this.cam.camera);
     this.ui.setReady(true, true);
@@ -133,7 +140,9 @@ export class ZenGarden {
     this.bonsaiState = { ...world.bonsai, pruned: [...world.bonsai.pruned] };
     this.basinState = { ...world.basin };
     this.mossStates = world.moss.map((m) => ({ ...m }));
+    this.lanternStates = world.lanterns.map((l) => ({ ...l }));
     this.rebuildLiving(world.stones);
+    this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
     this.sand.paintBase(hashSeed(seed));
     this.sand.paintWaves(seed);
     for (const s of world.stones) {
@@ -149,6 +158,7 @@ export class ZenGarden {
     this.bonsaiState = { ...save.bonsai, pruned: [...save.bonsai.pruned] };
     this.basinState = { ...save.basin };
     this.mossStates = (save.moss ?? []).map((m) => ({ ...m }));
+    this.lanternStates = (save.lanterns ?? generateWorld(save.seed).lanterns).map((l) => ({ ...l }));
     this.rebuildLiving(save.stones);
     this.sand.paintBase(hashSeed(save.seed));
     if (save.sand) {
@@ -169,23 +179,26 @@ export class ZenGarden {
     if (this.mossGroup) this.scene.remove(this.mossGroup);
     if (this.basinGroup) this.scene.remove(this.basinGroup);
     if (this.gravelGroup) this.scene.remove(this.gravelGroup);
+    if (this.lanternGroup) this.scene.remove(this.lanternGroup);
 
     this.stones.load(stones.map((s) => ({ ...s })));
-    this.bonsai = new Bonsai(this.seed, this.bonsaiState);
+    this.bonsai = new Bonsai(this.seed, this.bonsaiState, seasonFromBonsai(this.bonsaiState));
     this.scene.add(this.bonsai.group);
     this.mossGroup = createMoss(this.mossStates);
     this.scene.add(this.mossGroup);
     this.basinGroup = createBasin(this.basinState);
     this.scene.add(this.basinGroup);
+    this.lanternGroup = createLanterns(this.lanternStates);
+    this.scene.add(this.lanternGroup);
     this.gravelGroup = scatterGravel(this.seed);
     this.scene.add(this.gravelGroup);
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf3ead8, 0x7d7764, 0.72);
+    const hemi = new THREE.HemisphereLight(0xf6e6c8, 0x6e6a58, 0.62);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1d6, 1.15);
-    sun.position.set(9, 14, 6);
+    const sun = new THREE.DirectionalLight(0xffe4b8, 1.05);
+    sun.position.set(8, 13, 7);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.near = 2;
@@ -196,7 +209,10 @@ export class ZenGarden {
     sun.shadow.camera.bottom = -12;
     sun.shadow.bias = -0.0008;
     this.scene.add(sun);
-    this.scene.add(new THREE.AmbientLight(0xefe6d4, 0.22));
+    const fill = new THREE.DirectionalLight(0xc8d4e0, 0.28);
+    fill.position.set(-8, 6, -4);
+    this.scene.add(fill);
+    this.scene.add(new THREE.AmbientLight(0xefe2cc, 0.2));
   }
 
   private bindUi(): void {
@@ -258,6 +274,13 @@ export class ZenGarden {
     if (e.key === "Escape") this.ui.showNewDialog(false);
   }
 
+  private waterBonsai(): ReturnType<typeof seasonFromBonsai> {
+    const season = this.bonsai.water(this.bonsaiState);
+    this.ui.setSeason(season);
+    this.scheduleSave(true);
+    return season;
+  }
+
   private setTool(tool: ToolId): void {
     this.tool = tool;
     this.ui.setTool(tool);
@@ -305,8 +328,7 @@ export class ZenGarden {
       return;
     }
     if (this.tool === "water" && (hit.kind === "bonsai" || hit.kind === "foliage")) {
-      this.bonsai.water(this.bonsaiState);
-      this.scheduleSave(true);
+      this.waterBonsai();
       return;
     }
     if (this.tool === "prune" && hit.kind === "foliage" && hit.foliageId) {
@@ -404,6 +426,9 @@ export class ZenGarden {
     }
     if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.1) return false;
     if ((this.basinState.x - x) ** 2 + (this.basinState.z - z) ** 2 < 1.2) return false;
+    for (const l of this.lanternStates) {
+      if ((l.x - x) ** 2 + (l.z - z) ** 2 < 0.7) return false;
+    }
     const state: StoneState = {
       id: nextStoneId(this.stones.stones),
       x,
@@ -422,6 +447,7 @@ export class ZenGarden {
       { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.7 },
       { x: this.basinState.x, z: this.basinState.z, r: 0.75 },
     ];
+    for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });
     for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.32 + s.scale * 0.18 });
     return list;
   }
@@ -442,6 +468,7 @@ export class ZenGarden {
     ];
     if (this.basinGroup) objects.push(this.basinGroup);
     if (this.mossGroup) objects.push(this.mossGroup);
+    if (this.lanternGroup) objects.push(this.lanternGroup);
     const hits = this.raycaster.intersectObjects(objects, true);
     if (hits.length) {
       const obj = hits[0].object;
@@ -497,6 +524,7 @@ export class ZenGarden {
       moss: this.mossStates.map((m) => ({ ...m })),
       basin: { ...this.basinState },
       bonsai: { ...this.bonsaiState, pruned: [...this.bonsaiState.pruned] },
+      lanterns: this.lanternStates.map((l) => ({ ...l })),
       camera: this.cam.toState(),
     };
     if (writeSave(save)) this.ui.flashSaved();
@@ -525,8 +553,9 @@ export class ZenGarden {
     const dt = this.clock.getDelta();
     this.waterTime += dt;
     this.sand.flush();
-    this.bonsai.update(performance.now());
+    this.bonsai.update(performance.now(), this.clock.elapsedTime);
     if (this.basinGroup) updateWater(this.basinGroup, this.waterTime);
+    if (this.lanternGroup) updateLanterns(this.lanternGroup, this.waterTime);
     this.renderer.render(this.scene, this.cam.camera);
   };
 
@@ -543,6 +572,10 @@ export class ZenGarden {
         this.plant(freshSeed());
         this.scheduleSave(true);
       },
+      getSeason: () => seasonFromBonsai(this.bonsaiState),
+      getLanternCount: () => this.lanternStates.length,
+      getFoliageCount: () => this.bonsai.foliage.size,
+      waterBonsai: () => this.waterBonsai(),
     };
     window.__ZEN_GARDEN__ = api;
   }

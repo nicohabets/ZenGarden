@@ -1,8 +1,13 @@
 import * as THREE from "three";
 import { mulberry32, randRange } from "./rng";
-import { GARDEN, type BonsaiState } from "./types";
+import { GARDEN, seasonFromBonsai, type BonsaiState, type Season } from "./types";
 
-const FOLIAGE_BASE = [0x4f5d3e, 0x5b6844, 0x3f4c32, 0x6a734c];
+const SEASON_COLORS: Record<Season, number[]> = {
+  spring: [0x6e8a4e, 0x88a05c, 0xd9a7b0, 0x5c7344],
+  summer: [0x3f5a32, 0x4f6b3c, 0x2f4a28, 0x5a7344],
+  autumn: [0x8a5a2c, 0xb06a32, 0x6e3e1e, 0xc4843c],
+  winter: [0x5a5346, 0x6a6456, 0x4a463c, 0x7a7264],
+};
 
 export class Bonsai {
   readonly group = new THREE.Group();
@@ -11,16 +16,20 @@ export class Bonsai {
   private soil!: THREE.MeshStandardMaterial;
   private wetUntil = 0;
   private droplets: THREE.Mesh[] = [];
+  private petals: THREE.Mesh[] = [];
+  private season: Season = "spring";
 
   constructor(
     readonly seed: number,
     state: BonsaiState,
+    season: Season,
   ) {
     this.group.userData.kind = "bonsai";
+    this.season = season;
     this.build(state);
     this.setPose(state.x, state.z, state.rotY);
     for (const id of state.pruned) this.removeFoliage(id);
-    this.applyWaterLook(state);
+    this.applySeason(state, season);
   }
 
   setPose(x: number, z: number, rotY: number): void {
@@ -30,35 +39,64 @@ export class Bonsai {
 
   prune(id: string): boolean {
     if (!this.foliage.has(id)) return false;
-    if (this.foliage.size <= 2) return false;
+    if (this.foliage.size <= 3) return false;
     this.removeFoliage(id);
     return true;
   }
 
-  water(state: BonsaiState): void {
+  water(state: BonsaiState): Season {
     state.wateredCount += 1;
     state.lastWatered = Date.now();
+    const season = seasonFromBonsai(state);
     this.wetUntil = performance.now() + 4200;
     this.soil.color.setHex(0x2a2218);
     this.spawnDroplets();
-    this.applyWaterLook(state);
+    if (season === "spring" || season === "autumn") this.spawnPetals(season);
+    this.applySeason(state, season);
+    return season;
   }
 
-  update(now: number): void {
+  applySeason(state: BonsaiState, season: Season): void {
+    this.season = season;
+    const palette = SEASON_COLORS[season];
+    const grow = 1 + Math.min(0.38, state.wateredCount * 0.07);
+    const winterShrink = season === "winter" ? 0.78 : 1;
+    let i = 0;
+    for (const mesh of this.foliage.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.color.setHex(palette[i % palette.length]);
+      const rest = (mesh.userData.restScale as number) ?? 1;
+      const s = rest * grow * winterShrink;
+      mesh.scale.setScalar(s);
+      i += 1;
+    }
+  }
+
+  update(now: number, elapsed: number): void {
     if (this.wetUntil && now > this.wetUntil) {
       this.soil.color.setHex(0x3b3226);
       this.wetUntil = 0;
+    }
+    let f = 0;
+    for (const mesh of this.foliage.values()) {
+      const rest = mesh.userData.restRot as THREE.Euler;
+      const sway = Math.sin(elapsed * 1.15 + f * 0.7) * 0.045;
+      mesh.rotation.z = rest.z + sway;
+      mesh.rotation.x = rest.x + sway * 0.35;
+      f += 1;
     }
     for (let i = this.droplets.length - 1; i >= 0; i--) {
       const d = this.droplets[i];
       d.position.y -= 0.018;
       d.scale.multiplyScalar(0.96);
-      if (d.position.y < 0.12) {
-        this.group.remove(d);
-        d.geometry.dispose();
-        (d.material as THREE.Material).dispose();
-        this.droplets.splice(i, 1);
-      }
+      if (d.position.y < 0.12) this.disposeMesh(d, this.droplets, i);
+    }
+    for (let i = this.petals.length - 1; i >= 0; i--) {
+      const p = this.petals[i];
+      p.position.y -= 0.006 + (p.userData.fall as number);
+      p.position.x += Math.sin(elapsed * 1.4 + i) * 0.004;
+      p.rotation.z += 0.03;
+      if (p.position.y < 0.05) this.disposeMesh(p, this.petals, i);
     }
   }
 
@@ -103,14 +141,14 @@ export class Bonsai {
     const trunkPts: THREE.Vector3[] = [];
     let x = 0;
     let z = 0;
-    for (let i = 0; i < 7; i++) {
-      const y = 0.3 + i * 0.18;
-      x += randRange(rng, -0.07, 0.08);
-      z += randRange(rng, -0.05, 0.05);
+    for (let i = 0; i < 8; i++) {
+      const y = 0.3 + i * 0.17;
+      x += randRange(rng, -0.08, 0.09);
+      z += randRange(rng, -0.06, 0.06);
       trunkPts.push(new THREE.Vector3(x, y, z));
     }
     const trunk = new THREE.Mesh(
-      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(trunkPts), 20, 0.055, 8, false),
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(trunkPts), 22, 0.055, 8, false),
       new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.86 }),
     );
     trunk.castShadow = true;
@@ -118,16 +156,16 @@ export class Bonsai {
     this.group.add(trunk);
     this.pickables.push(trunk);
 
-    const branchCount = 4 + Math.floor(rng() * 3);
+    const branchCount = 6 + Math.floor(rng() * 3);
     let foliageIndex = 0;
     for (let b = 0; b < branchCount; b++) {
-      const t = 0.35 + rng() * 0.55;
+      const t = 0.28 + rng() * 0.65;
       const origin = trunkPts[Math.min(trunkPts.length - 1, Math.floor(t * (trunkPts.length - 1)))];
-      const dir = new THREE.Vector3(randRange(rng, -1, 1), randRange(rng, 0.2, 0.8), randRange(rng, -1, 1)).normalize();
-      const length = randRange(rng, 0.28, 0.55);
+      const dir = new THREE.Vector3(randRange(rng, -1, 1), randRange(rng, 0.15, 0.85), randRange(rng, -1, 1)).normalize();
+      const length = randRange(rng, 0.26, 0.58);
       const end = origin.clone().addScaledVector(dir, length);
       const branch = new THREE.Mesh(
-        new THREE.TubeGeometry(new THREE.CatmullRomCurve3([origin, end]), 8, 0.018, 6, false),
+        new THREE.TubeGeometry(new THREE.CatmullRomCurve3([origin, end]), 8, 0.016, 6, false),
         new THREE.MeshStandardMaterial({ color: 0x3d2c20, roughness: 0.9 }),
       );
       branch.castShadow = true;
@@ -135,25 +173,27 @@ export class Bonsai {
       this.group.add(branch);
       this.pickables.push(branch);
 
-      const clusters = 1 + Math.floor(rng() * 2);
+      const clusters = 2 + Math.floor(rng() * 2);
       for (let c = 0; c < clusters; c++) {
         const id = `f${foliageIndex++}`;
-        const color = FOLIAGE_BASE[foliageIndex % FOLIAGE_BASE.length];
+        const restScale = randRange(rng, 0.85, 1.15);
         const foliage = new THREE.Mesh(
-          new THREE.IcosahedronGeometry(randRange(rng, 0.16, 0.26), 1),
+          new THREE.IcosahedronGeometry(randRange(rng, 0.14, 0.24), 1),
           new THREE.MeshStandardMaterial({
-            color,
+            color: SEASON_COLORS[this.season][foliageIndex % 4],
             roughness: 0.78,
             flatShading: true,
           }),
         );
         foliage.position.copy(end).add(
-          new THREE.Vector3(randRange(rng, -0.08, 0.08), randRange(rng, 0.02, 0.1), randRange(rng, -0.08, 0.08)),
+          new THREE.Vector3(randRange(rng, -0.1, 0.1), randRange(rng, 0.02, 0.12), randRange(rng, -0.1, 0.1)),
         );
         foliage.castShadow = true;
         foliage.userData.kind = "foliage";
         foliage.userData.foliageId = id;
         foliage.userData.bonsai = true;
+        foliage.userData.restScale = restScale;
+        foliage.userData.restRot = foliage.rotation.clone();
         this.group.add(foliage);
         this.foliage.set(id, foliage);
         this.pickables.push(foliage);
@@ -175,14 +215,6 @@ export class Bonsai {
     if (idx >= 0) this.pickables.splice(idx, 1);
   }
 
-  private applyWaterLook(state: BonsaiState): void {
-    const lush = Math.min(1, 0.35 + state.wateredCount * 0.08);
-    for (const mesh of this.foliage.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.offsetHSL(0, 0.02 * lush, 0.015 * lush);
-    }
-  }
-
   private spawnDroplets(): void {
     for (let i = 0; i < 10; i++) {
       const drop = new THREE.Mesh(
@@ -198,5 +230,31 @@ export class Bonsai {
       this.group.add(drop);
       this.droplets.push(drop);
     }
+  }
+
+  private spawnPetals(season: Season): void {
+    const color = season === "autumn" ? 0xc4843c : 0xe6b4be;
+    for (let i = 0; i < 14; i++) {
+      const petal = new THREE.Mesh(
+        new THREE.CircleGeometry(0.028, 5),
+        new THREE.MeshStandardMaterial({
+          color,
+          side: THREE.DoubleSide,
+          roughness: 0.7,
+        }),
+      );
+      petal.position.set((Math.random() - 0.5) * 0.5, 0.9 + Math.random() * 0.5, (Math.random() - 0.5) * 0.5);
+      petal.rotation.set(Math.random(), Math.random(), Math.random());
+      petal.userData.fall = Math.random() * 0.004;
+      this.group.add(petal);
+      this.petals.push(petal);
+    }
+  }
+
+  private disposeMesh(mesh: THREE.Mesh, list: THREE.Mesh[], index: number): void {
+    this.group.remove(mesh);
+    mesh.geometry.dispose();
+    (mesh.material as THREE.Material).dispose();
+    list.splice(index, 1);
   }
 }
