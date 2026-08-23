@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-ssr
+*.local
+.cache
+.wrangler
+playwright-report
+test-results
+blob-report
+.DS_Store

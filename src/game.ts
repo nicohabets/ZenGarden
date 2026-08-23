@@ -1,0 +1,555 @@
+import * as THREE from "three";
+import { AmbientAudio } from "./audio";
+import { Bonsai } from "./bonsai";
+import { CameraRig } from "./camera";
+import { generateWorld, inBounds, nextStoneId } from "./generate";
+import { loadMuted, loadSave, writeMuted, writeSave } from "./persistence";
+import { SandField } from "./sand";
+import {
+  createBackdrop,
+  createBasin,
+  createFrame,
+  createGround,
+  createMoss,
+  scatterGravel,
+  updateWater,
+} from "./scenery";
+import { StoneField } from "./stones";
+import {
+  type BasinState,
+  type Blocker,
+  type BonsaiState,
+  type GardenSave,
+  type MossState,
+  type StoneState,
+  type ToolId,
+  type ZenGardenAPI,
+} from "./types";
+import { GardenUI } from "./ui";
+import { freshSeed, hashSeed } from "./rng";
+
+interface Pointer {
+  id: number;
+  x: number;
+  y: number;
+  button: number;
+}
+
+export class ZenGarden {
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly scene = new THREE.Scene();
+  private readonly clock = new THREE.Clock();
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly ndc = new THREE.Vector2();
+  private readonly plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly hit = new THREE.Vector3();
+  private readonly pointers = new Map<number, Pointer>();
+
+  private readonly cam = new CameraRig();
+  private readonly ui = new GardenUI();
+  private readonly audio: AmbientAudio;
+  private readonly sand: SandField;
+  private readonly stones = new StoneField();
+
+  private seed: number;
+  private tool: ToolId = "rake";
+  private bonsai!: Bonsai;
+  private bonsaiState!: BonsaiState;
+  private basinState!: BasinState;
+  private mossStates: MossState[] = [];
+  private mossGroup: THREE.Group | null = null;
+  private basinGroup: THREE.Group | null = null;
+  private gravelGroup: THREE.Group | null = null;
+  private waterTime = 0;
+
+  private mode: "idle" | "rake" | "orbit" | "pan" | "pinch" | "drag-stone" | "drag-bonsai" = "idle";
+  private lastSand: { x: number; z: number } | null = null;
+  private lastPointer: Pointer | null = null;
+  private pinchDist = 0;
+  private dragId: string | null = null;
+  private saveTimer = 0;
+  private rakeSoundAt = 0;
+  private disposed = false;
+
+  constructor(private readonly canvas: HTMLCanvasElement) {
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setSize(window.innerWidth, window.innerHeight, false);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    this.scene.background = new THREE.Color(0xe6dfd1);
+    this.scene.fog = new THREE.Fog(0xe6dfd1, 18, 42);
+
+    this.audio = new AmbientAudio(loadMuted());
+    this.sand = new SandField();
+    this.seed = freshSeed();
+
+    this.lights();
+    this.scene.add(createGround());
+    this.scene.add(createFrame());
+    this.scene.add(createBackdrop());
+    this.scene.add(this.sand.mesh);
+    this.scene.add(this.stones.group);
+
+    this.bindUi();
+    this.bindInput();
+    this.cam.setAspect(window.innerWidth / window.innerHeight);
+  }
+
+  async start(): Promise<void> {
+    const saved = loadSave();
+    if (saved) {
+      await this.restore(saved);
+    } else {
+      this.plant(freshSeed());
+      this.scheduleSave(true);
+    }
+    this.ui.setMuted(this.audio.muted);
+    this.ui.setTool(this.tool);
+    this.ui.setSeed(this.seed);
+    this.resize();
+    this.renderer.render(this.scene, this.cam.camera);
+    this.ui.setReady(true, true);
+    this.exposeApi();
+    this.tick();
+  }
+
+  flushSave(): void {
+    this.persist();
+  }
+
+  private plant(seed: number): void {
+    this.seed = seed;
+    const world = generateWorld(seed);
+    this.bonsaiState = { ...world.bonsai, pruned: [...world.bonsai.pruned] };
+    this.basinState = { ...world.basin };
+    this.mossStates = world.moss.map((m) => ({ ...m }));
+    this.rebuildLiving(world.stones);
+    this.sand.paintBase(hashSeed(seed));
+    this.sand.paintWaves(seed);
+    for (const s of world.stones) {
+      if (s.scale > 0.9) this.sand.paintConcentric(s.x, s.z, 0.55 + s.scale * 0.55);
+    }
+    this.sand.paintConcentric(this.basinState.x, this.basinState.z, 1.15);
+    this.sand.flush();
+    this.ui.setSeed(seed);
+  }
+
+  private async restore(save: GardenSave): Promise<void> {
+    this.seed = save.seed;
+    this.bonsaiState = { ...save.bonsai, pruned: [...save.bonsai.pruned] };
+    this.basinState = { ...save.basin };
+    this.mossStates = (save.moss ?? []).map((m) => ({ ...m }));
+    this.rebuildLiving(save.stones);
+    this.sand.paintBase(hashSeed(save.seed));
+    if (save.sand) {
+      try {
+        await this.sand.importDataUrl(save.sand);
+      } catch {
+        this.sand.paintWaves(save.seed);
+      }
+    } else {
+      this.sand.paintWaves(save.seed);
+    }
+    this.cam.applyState(save.camera);
+    this.ui.setSeed(save.seed);
+  }
+
+  private rebuildLiving(stones: StoneState[]): void {
+    if (this.bonsai) this.scene.remove(this.bonsai.group);
+    if (this.mossGroup) this.scene.remove(this.mossGroup);
+    if (this.basinGroup) this.scene.remove(this.basinGroup);
+    if (this.gravelGroup) this.scene.remove(this.gravelGroup);
+
+    this.stones.load(stones.map((s) => ({ ...s })));
+    this.bonsai = new Bonsai(this.seed, this.bonsaiState);
+    this.scene.add(this.bonsai.group);
+    this.mossGroup = createMoss(this.mossStates);
+    this.scene.add(this.mossGroup);
+    this.basinGroup = createBasin(this.basinState);
+    this.scene.add(this.basinGroup);
+    this.gravelGroup = scatterGravel(this.seed);
+    this.scene.add(this.gravelGroup);
+  }
+
+  private lights(): void {
+    const hemi = new THREE.HemisphereLight(0xf3ead8, 0x7d7764, 0.72);
+    this.scene.add(hemi);
+    const sun = new THREE.DirectionalLight(0xfff1d6, 1.15);
+    sun.position.set(9, 14, 6);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.near = 2;
+    sun.shadow.camera.far = 40;
+    sun.shadow.camera.left = -12;
+    sun.shadow.camera.right = 12;
+    sun.shadow.camera.top = 12;
+    sun.shadow.camera.bottom = -12;
+    sun.shadow.bias = -0.0008;
+    this.scene.add(sun);
+    this.scene.add(new THREE.AmbientLight(0xefe6d4, 0.22));
+  }
+
+  private bindUi(): void {
+    this.ui.onToolClick((tool) => this.setTool(tool));
+    this.ui.muteBtn.addEventListener("click", () => {
+      this.audio.setMuted(!this.audio.muted);
+      writeMuted(this.audio.muted);
+      this.ui.setMuted(this.audio.muted);
+      void this.audio.ensure();
+    });
+    this.ui.newBtn.addEventListener("click", () => this.ui.showNewDialog(true));
+    this.ui.keepBtn.addEventListener("click", () => this.ui.showNewDialog(false));
+    this.ui.beginBtn.addEventListener("click", () => {
+      this.ui.showNewDialog(false);
+      this.plant(freshSeed());
+      this.scheduleSave(true);
+    });
+    this.ui.dialog.addEventListener("click", (e) => {
+      if (e.target === this.ui.dialog) this.ui.showNewDialog(false);
+    });
+  }
+
+  private bindInput(): void {
+    const el = this.canvas;
+    el.addEventListener("pointerdown", (e) => this.onDown(e));
+    el.addEventListener("pointermove", (e) => this.onMove(e));
+    el.addEventListener("pointerup", (e) => this.onUp(e));
+    el.addEventListener("pointercancel", (e) => this.onUp(e));
+    el.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        this.cam.dolly(e.deltaY > 0 ? 0.08 : -0.08);
+        this.scheduleSave();
+      },
+      { passive: false },
+    );
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+    window.addEventListener("resize", () => this.resize());
+    window.addEventListener("keydown", (e) => this.onKey(e));
+    window.addEventListener("pagehide", () => this.persist());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") this.persist();
+    });
+  }
+
+  private onKey(e: KeyboardEvent): void {
+    if (e.target instanceof HTMLInputElement) return;
+    const map: Record<string, ToolId> = {
+      "1": "rake",
+      "2": "stone",
+      "3": "water",
+      "4": "prune",
+      "5": "place",
+    };
+    if (map[e.key]) this.setTool(map[e.key]);
+    if (e.key === "m" || e.key === "M") this.ui.muteBtn.click();
+    if (e.key === "n" || e.key === "N") this.ui.showNewDialog(true);
+    if (e.key === "Escape") this.ui.showNewDialog(false);
+  }
+
+  private setTool(tool: ToolId): void {
+    this.tool = tool;
+    this.ui.setTool(tool);
+  }
+
+  private onDown(e: PointerEvent): void {
+    void this.audio.ensure();
+    this.canvas.setPointerCapture(e.pointerId);
+    const p = { id: e.pointerId, x: e.clientX, y: e.clientY, button: e.button };
+    this.pointers.set(e.pointerId, p);
+
+    if (this.pointers.size === 2) {
+      this.mode = "pinch";
+      this.pinchDist = this.fingerDistance();
+      this.lastSand = null;
+      return;
+    }
+
+    if (e.button === 2 || e.altKey) {
+      this.mode = "orbit";
+      this.lastPointer = p;
+      return;
+    }
+    if (e.button === 1 || e.shiftKey) {
+      this.mode = "pan";
+      this.lastPointer = p;
+      return;
+    }
+
+    const hit = this.pick(e.clientX, e.clientY);
+    if (!hit) return;
+
+    if (this.tool === "rake" && (hit.kind === "sand" || hit.kind === "moss")) {
+      this.mode = "rake";
+      this.lastSand = { x: hit.x, z: hit.z };
+      return;
+    }
+    if (this.tool === "stone" && hit.kind === "stone" && hit.id) {
+      this.mode = "drag-stone";
+      this.dragId = hit.id;
+      return;
+    }
+    if (this.tool === "stone" && hit.kind === "sand") {
+      this.tryPlaceStone(hit.x, hit.z);
+      return;
+    }
+    if (this.tool === "water" && (hit.kind === "bonsai" || hit.kind === "foliage")) {
+      this.bonsai.water(this.bonsaiState);
+      this.scheduleSave(true);
+      return;
+    }
+    if (this.tool === "prune" && hit.kind === "foliage" && hit.foliageId) {
+      if (this.bonsai.prune(hit.foliageId)) {
+        this.bonsaiState.pruned.push(hit.foliageId);
+        this.scheduleSave(true);
+      }
+      return;
+    }
+    if (this.tool === "place" && (hit.kind === "bonsai" || hit.kind === "foliage")) {
+      this.mode = "drag-bonsai";
+      return;
+    }
+  }
+
+  private onMove(e: PointerEvent): void {
+    const prev = this.pointers.get(e.pointerId);
+    this.pointers.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY, button: e.button });
+
+    if (this.mode === "pinch" && this.pointers.size >= 2) {
+      const dist = this.fingerDistance();
+      if (this.pinchDist > 0) {
+        const ratio = this.pinchDist / dist;
+        this.cam.dolly(ratio - 1);
+      }
+      this.pinchDist = dist;
+      const [a, b] = [...this.pointers.values()];
+      if (prev && a && b) {
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        const old = this.lastPointer;
+        if (old) this.cam.orbit(midX - old.x, midY - old.y);
+        this.lastPointer = { id: -1, x: midX, y: midY, button: 0 };
+      }
+      return;
+    }
+
+    if (this.mode === "orbit" && prev) {
+      this.cam.orbit(e.clientX - prev.x, e.clientY - prev.y);
+      return;
+    }
+    if (this.mode === "pan" && prev) {
+      this.cam.pan(e.clientX - prev.x, e.clientY - prev.y);
+      return;
+    }
+
+    const sand = this.groundPoint(e.clientX, e.clientY);
+    if (!sand) return;
+
+    if (this.mode === "rake" && this.lastSand) {
+      this.sand.rake(this.lastSand.x, this.lastSand.z, sand.x, sand.z, this.blockers());
+      this.lastSand = sand;
+      const now = performance.now();
+      if (now - this.rakeSoundAt > 90) {
+        this.audio.rakeTick();
+        this.rakeSoundAt = now;
+      }
+      return;
+    }
+    if (this.mode === "drag-stone" && this.dragId && inBounds(sand.x, sand.z, 0.7)) {
+      this.stones.move(this.dragId, sand.x, sand.z);
+      return;
+    }
+    if (this.mode === "drag-bonsai") {
+      if (inBounds(sand.x, sand.z, 1.05)) {
+        this.bonsaiState.x = sand.x;
+        this.bonsaiState.z = sand.z;
+        this.bonsai.setPose(sand.x, sand.z, this.bonsaiState.rotY);
+      }
+    }
+  }
+
+  private onUp(e: PointerEvent): void {
+    this.pointers.delete(e.pointerId);
+    if (this.mode === "rake" || this.mode === "drag-stone" || this.mode === "drag-bonsai") {
+      this.scheduleSave(true);
+    } else if (this.mode === "orbit" || this.mode === "pan" || this.mode === "pinch") {
+      this.scheduleSave();
+    }
+    this.mode = this.pointers.size >= 2 ? "pinch" : "idle";
+    this.lastSand = null;
+    this.dragId = null;
+    this.lastPointer = null;
+    try {
+      this.canvas.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  }
+
+  private tryPlaceStone(x: number, z: number): boolean {
+    if (!inBounds(x, z, 0.75)) return false;
+    for (const s of this.stones.stones) {
+      if ((s.x - x) ** 2 + (s.z - z) ** 2 < 0.55) return false;
+    }
+    if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.1) return false;
+    if ((this.basinState.x - x) ** 2 + (this.basinState.z - z) ** 2 < 1.2) return false;
+    const state: StoneState = {
+      id: nextStoneId(this.stones.stones),
+      x,
+      z,
+      rotY: Math.random() * Math.PI * 2,
+      scale: 0.7 + Math.random() * 0.45,
+      variant: Math.floor(Math.random() * 12),
+    };
+    this.stones.add(state);
+    this.scheduleSave(true);
+    return true;
+  }
+
+  private blockers(): Blocker[] {
+    const list: Blocker[] = [
+      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.7 },
+      { x: this.basinState.x, z: this.basinState.z, r: 0.75 },
+    ];
+    for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.32 + s.scale * 0.18 });
+    return list;
+  }
+
+  private pick(cx: number, cy: number): {
+    kind: string;
+    x: number;
+    z: number;
+    id?: string;
+    foliageId?: string;
+  } | null {
+    this.setNdc(cx, cy);
+    this.raycaster.setFromCamera(this.ndc, this.cam.camera);
+    const objects: THREE.Object3D[] = [
+      this.sand.mesh,
+      this.stones.group,
+      this.bonsai.group,
+    ];
+    if (this.basinGroup) objects.push(this.basinGroup);
+    if (this.mossGroup) objects.push(this.mossGroup);
+    const hits = this.raycaster.intersectObjects(objects, true);
+    if (hits.length) {
+      const obj = hits[0].object;
+      let kind = obj.userData.kind as string | undefined;
+      let cursor: THREE.Object3D | null = obj;
+      while (!kind && cursor) {
+        kind = cursor.userData.kind as string | undefined;
+        cursor = cursor.parent;
+      }
+      const p = hits[0].point;
+      return {
+        kind: kind ?? "sand",
+        x: p.x,
+        z: p.z,
+        id: obj.userData.id as string | undefined,
+        foliageId: obj.userData.foliageId as string | undefined,
+      };
+    }
+    const ground = this.groundPoint(cx, cy);
+    if (!ground) return null;
+    if (!inBounds(ground.x, ground.z, 0.05)) return null;
+    return { kind: "sand", x: ground.x, z: ground.z };
+  }
+
+  private groundPoint(cx: number, cy: number): { x: number; z: number } | null {
+    this.setNdc(cx, cy);
+    this.raycaster.setFromCamera(this.ndc, this.cam.camera);
+    if (this.raycaster.ray.intersectPlane(this.plane, this.hit)) {
+      return { x: this.hit.x, z: this.hit.z };
+    }
+    return null;
+  }
+
+  private setNdc(cx: number, cy: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    this.ndc.x = ((cx - rect.left) / rect.width) * 2 - 1;
+    this.ndc.y = -((cy - rect.top) / rect.height) * 2 + 1;
+  }
+
+  private fingerDistance(): number {
+    const pts = [...this.pointers.values()];
+    if (pts.length < 2) return 0;
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  }
+
+  private persist(): void {
+    const save: GardenSave = {
+      v: 1,
+      seed: this.seed,
+      savedAt: Date.now(),
+      sand: this.sand.exportDataUrl(),
+      stones: this.stones.stones.map((s) => ({ ...s })),
+      moss: this.mossStates.map((m) => ({ ...m })),
+      basin: { ...this.basinState },
+      bonsai: { ...this.bonsaiState, pruned: [...this.bonsaiState.pruned] },
+      camera: this.cam.toState(),
+    };
+    if (writeSave(save)) this.ui.flashSaved();
+  }
+
+  private scheduleSave(immediate = false): void {
+    window.clearTimeout(this.saveTimer);
+    if (immediate) {
+      this.persist();
+      return;
+    }
+    this.saveTimer = window.setTimeout(() => this.persist(), 450);
+  }
+
+  private resize(): void {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setSize(w, h, false);
+    this.cam.setAspect(w / Math.max(1, h));
+  }
+
+  private tick = (): void => {
+    if (this.disposed) return;
+    requestAnimationFrame(this.tick);
+    const dt = this.clock.getDelta();
+    this.waterTime += dt;
+    this.sand.flush();
+    this.bonsai.update(performance.now());
+    if (this.basinGroup) updateWater(this.basinGroup, this.waterTime);
+    this.renderer.render(this.scene, this.cam.camera);
+  };
+
+  private exposeApi(): void {
+    const api: ZenGardenAPI = {
+      ready: true,
+      getSeed: () => this.seed,
+      getTool: () => this.tool,
+      setTool: (id) => this.setTool(id),
+      getStoneCount: () => this.stones.stones.length,
+      placeStoneAt: (x, z) => this.tryPlaceStone(x, z),
+      getSave: () => loadSave(),
+      newGarden: () => {
+        this.plant(freshSeed());
+        this.scheduleSave(true);
+      },
+    };
+    window.__ZEN_GARDEN__ = api;
+  }
+}
+
+declare global {
+  interface Window {
+    __ZEN_GARDEN__?: ZenGardenAPI;
+  }
+}
