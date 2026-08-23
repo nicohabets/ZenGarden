@@ -67,6 +67,10 @@ Cloudflare’s connected-repo pipeline runs `npm ci` (clean-install) and then th
 - **Build command:** `npm run build` if the dashboard has a separate field and you want the Vite build to run before Wrangler starts. If that field is empty, Wrangler still runs `[build].command = "npm run build"` as part of `wrangler deploy`, which writes `dist/` before assets upload.
 - **Output / assets directory:** `dist`
 - **Node version:** 20 or newer
+- **workers.dev:** enabled (`workers_dev = true`). Production is `https://zengarden.<your-subdomain>.workers.dev` (or `https://zengarden.workers.dev` on some accounts).
+- **Preview URLs:** enabled (`preview_urls = true`) so each Workers Build gets a clickable `https://<version>-zengarden.<subdomain>.workers.dev` link.
+
+The Wrangler `name` is `zengarden` to match the existing Cloudflare Workers Builds service — do not rename it or a second Worker will be created.
 
 `not_found_handling = "single-page-application"` serves `index.html` for unknown paths.
 

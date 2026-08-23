@@ -1,8 +1,10 @@
-name = "zen-garden"
+name = "zengarden"
+workers_dev = true
+preview_urls = true
 compatibility_date = "2026-08-23"
 
 # Workers Static Assets — no Worker script, no Pages project flag.
-# `npx wrangler deploy` (after npm ci) runs [build] then uploads dist/.
+# Service name matches the existing Cloudflare Workers Builds project (`zengarden`).
 [assets]
 directory = "./dist"
 not_found_handling = "single-page-application"
