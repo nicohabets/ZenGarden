@@ -28,7 +28,7 @@ export function hashSeed(n: number): number {
 export function freshSeed(): number {
   const a = (Math.random() * 0xffffffff) >>> 0;
   const b = (Date.now() ^ ((performance.now() * 1000) | 0)) >>> 0;
-  return (a ^ b) || 1;
+  return ((a ^ b) >>> 0) || 1;
 }
 
 export function dist2(ax: number, az: number, bx: number, bz: number): number {

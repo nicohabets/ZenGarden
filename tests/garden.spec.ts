@@ -60,6 +60,8 @@ test.describe("Zen Garden", () => {
       stones: window.__ZEN_GARDEN__!.getStoneCount(),
     }));
     expect(before.seed).toBeGreaterThan(0);
+    expect(Number.isInteger(before.seed)).toBe(true);
+    expect(before.stones).toBeGreaterThan(0);
 
     const placed = await page.evaluate(() => window.__ZEN_GARDEN__!.placeStoneAt(2.15, -1.35));
     expect(placed).toBe(true);

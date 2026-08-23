@@ -58,11 +58,11 @@ export class StoneField {
 
   load(states: StoneState[]): void {
     this.clear();
-    for (const s of states) this.add(s, false);
+    for (const s of states) this.add(s);
   }
 
-  add(state: StoneState, push = true): THREE.Mesh {
-    if (push) this.stones.push(state);
+  add(state: StoneState): THREE.Mesh {
+    this.stones.push(state);
     const mesh = createStoneMesh(state);
     this.meshes.set(state.id, mesh);
     this.group.add(mesh);
