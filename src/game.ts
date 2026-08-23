@@ -145,8 +145,15 @@ export class ZenGarden {
     this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
     this.sand.paintBase(hashSeed(seed));
     this.sand.paintWaves(seed);
+    const raked = new Set<number>();
     for (const s of world.stones) {
-      if (s.scale > 0.9) this.sand.paintConcentric(s.x, s.z, 0.55 + s.scale * 0.55);
+      if (s.cluster != null) {
+        if (raked.has(s.cluster)) continue;
+        raked.add(s.cluster);
+        this.sand.paintConcentric(s.x, s.z, 0.9 + s.scale * 0.7);
+      } else if (s.scale > 0.9) {
+        this.sand.paintConcentric(s.x, s.z, 0.55 + s.scale * 0.55);
+      }
     }
     this.sand.paintConcentric(this.basinState.x, this.basinState.z, 1.15);
     this.sand.flush();
@@ -195,10 +202,10 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf6e6c8, 0x6e6a58, 0.62);
+    const hemi = new THREE.HemisphereLight(0xf6e6c8, 0x6e6a58, 0.68);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xffe4b8, 1.05);
-    sun.position.set(8, 13, 7);
+    const sun = new THREE.DirectionalLight(0xffe4b8, 1.14);
+    sun.position.set(8.5, 13, 6.5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.near = 2;
@@ -209,10 +216,13 @@ export class ZenGarden {
     sun.shadow.camera.bottom = -12;
     sun.shadow.bias = -0.0008;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xc8d4e0, 0.28);
+    const fill = new THREE.DirectionalLight(0xc8d4e0, 0.34);
     fill.position.set(-8, 6, -4);
     this.scene.add(fill);
-    this.scene.add(new THREE.AmbientLight(0xefe2cc, 0.2));
+    const rim = new THREE.DirectionalLight(0xf0e6d4, 0.16);
+    rim.position.set(2, 4, -9);
+    this.scene.add(rim);
+    this.scene.add(new THREE.AmbientLight(0xefe2cc, 0.18));
   }
 
   private bindUi(): void {
@@ -393,7 +403,7 @@ export class ZenGarden {
       return;
     }
     if (this.mode === "drag-bonsai") {
-      if (inBounds(sand.x, sand.z, 1.05)) {
+      if (inBounds(sand.x, sand.z, 1.15)) {
         this.bonsaiState.x = sand.x;
         this.bonsaiState.z = sand.z;
         this.bonsai.setPose(sand.x, sand.z, this.bonsaiState.rotY);
@@ -424,7 +434,7 @@ export class ZenGarden {
     for (const s of this.stones.stones) {
       if ((s.x - x) ** 2 + (s.z - z) ** 2 < 0.55) return false;
     }
-    if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.1) return false;
+    if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.45) return false;
     if ((this.basinState.x - x) ** 2 + (this.basinState.z - z) ** 2 < 1.2) return false;
     for (const l of this.lanternStates) {
       if ((l.x - x) ** 2 + (l.z - z) ** 2 < 0.7) return false;
@@ -434,6 +444,8 @@ export class ZenGarden {
       x,
       z,
       rotY: Math.random() * Math.PI * 2,
+      tiltX: (Math.random() - 0.5) * 0.36,
+      tiltZ: (Math.random() - 0.5) * 0.28,
       scale: 0.7 + Math.random() * 0.45,
       variant: Math.floor(Math.random() * 12),
     };
@@ -444,7 +456,7 @@ export class ZenGarden {
 
   private blockers(): Blocker[] {
     const list: Blocker[] = [
-      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.7 },
+      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.88 },
       { x: this.basinState.x, z: this.basinState.z, r: 0.75 },
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });
@@ -566,6 +578,7 @@ export class ZenGarden {
       getTool: () => this.tool,
       setTool: (id) => this.setTool(id),
       getStoneCount: () => this.stones.stones.length,
+      getStoneStats: () => this.stones.stats(),
       placeStoneAt: (x, z) => this.tryPlaceStone(x, z),
       getSave: () => loadSave(),
       newGarden: () => {

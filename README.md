@@ -14,7 +14,7 @@ Open the site and the garden is ready.
 | Zoom | Scroll wheel | Pinch |
 | Tools | Toolbar, or keys `1`–`5` | Large toolbar buttons |
 
-Atmosphere: stone lanterns with a warm glow, koi in the basin, wind in the bonsai, falling petals after watering, and a season mark (春夏秋冬) that turns with care.
+Atmosphere: granite and basalt stones in ishi-gumi clusters (some with moss and lichen), a larger branched bonsai, stone lanterns with a warm glow, koi in the basin, wind in the foliage, falling petals after watering, and a season mark (春夏秋冬) that turns with care.
 
 Tools:
 
@@ -95,4 +95,4 @@ npm run cf:preview
 
 ## Stack
 
-TypeScript, Vite, Three.js. No React, no auth, no server store. The garden is an orthographic (isometric) scene with a rakeable sand texture, generated stones, moss, a water basin, and a bonsai you can water, prune, and move.
+TypeScript, Vite, Three.js. No React, no auth, no server store. The garden is an orthographic (isometric) scene with a rakeable sand texture, irregular garden stones, moss, a water basin, and a bonsai you can water, prune, and move.
