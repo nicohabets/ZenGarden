@@ -13,8 +13,9 @@
     "preview": "vite preview --host",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name zen-garden",
-    "cf:preview": "npm run build && wrangler pages dev dist"
+    "predeploy": "npm run build",
+    "deploy": "npm run build && wrangler deploy",
+    "cf:preview": "wrangler dev"
   },
   "dependencies": {
     "three": "^0.170.0"

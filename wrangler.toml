@@ -1,3 +1,11 @@
 name = "zen-garden"
 compatibility_date = "2026-08-23"
-pages_build_output_dir = "dist"
+
+# Workers Static Assets — no Worker script, no Pages project flag.
+# `npx wrangler deploy` (after npm ci) runs [build] then uploads dist/.
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+
+[build]
+command = "npm run build"
