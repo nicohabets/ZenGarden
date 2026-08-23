@@ -25,10 +25,10 @@ export function generateWorld(seed: number): GeneratedWorld {
   };
 
   const occupied: { p: Point; r: number }[] = [{ p: { x: basin.x, z: basin.z }, r: 1.15 }];
-  const bonsaiPos = place(rng, occupied, 1.55, 1.7);
+  const bonsaiPos = place(rng, occupied, 1.7, 2.2);
   bonsai.x = bonsaiPos.x;
   bonsai.z = bonsaiPos.z;
-  occupied.push({ p: bonsaiPos, r: 1.25 });
+  occupied.push({ p: bonsaiPos, r: 1.4 });
 
   const lanternCount = rng() > 0.35 ? 2 : 1;
   const lanterns: LanternState[] = [];
@@ -77,37 +77,37 @@ function placeIshiGumi(rng: () => number, occupied: { p: Point; r: number }[]): 
   let nextId = 0;
   let clusterId = 0;
 
-  const addCluster = (count: number, mainScale: number) => {
-    const spread = 0.42 + mainScale * 0.28;
-    const origin = place(rng, occupied, 0.7 + spread, 1.25);
-    occupied.push({ p: origin, r: 0.55 + spread });
+  const addCluster = (count: number, mainScale: number, preferred: number[]) => {
+    const spread = 0.85 + mainScale * 0.35;
+    const origin = place(rng, occupied, 0.85 + spread, 1.3);
+    occupied.push({ p: origin, r: 0.7 + spread });
     const heading = rng() * Math.PI * 2;
     const id = clusterId++;
+    const angles = [0, 0.55, -1.15, 2.3];
 
     for (let i = 0; i < count; i++) {
-      const scale = i === 0 ? mainScale : mainScale * randRange(rng, 0.42, 0.74);
-      const dist = i === 0 ? 0 : 0.32 + scale * 0.22 + mainScale * 0.16;
-      const angle = heading + (i === 1 ? 0.35 : i === 2 ? -0.95 : i * 2.1) + randRange(rng, -0.12, 0.12);
-      const x = origin.x + Math.cos(angle) * dist;
-      const z = origin.z + Math.sin(angle) * dist;
+      const scale = i === 0 ? mainScale : mainScale * randRange(rng, 0.48, 0.72);
+      const dist = i === 0 ? 0 : 0.72 + scale * 0.28 + mainScale * 0.12;
+      const angle = heading + angles[i] + randRange(rng, -0.08, 0.08);
+      const variant = preferred[i] ?? randInt(rng, 0, 11);
       stones.push({
         id: `s${nextId++}`,
-        x,
-        z,
+        x: origin.x + Math.cos(angle) * dist,
+        z: origin.z + Math.sin(angle) * dist,
         rotY: rng() * Math.PI * 2,
-        tiltX: randRange(rng, -0.24, 0.22),
-        tiltZ: randRange(rng, -0.18, 0.18),
+        tiltX: randRange(rng, -0.12, 0.1),
+        tiltZ: randRange(rng, -0.1, 0.1),
         scale,
-        variant: randInt(rng, 0, 11),
+        variant,
         cluster: id,
       });
     }
   };
 
-  addCluster(3, randRange(rng, 1.05, 1.38));
-  if (rng() > 0.4) addCluster(3, randRange(rng, 0.78, 1.08));
-  else addCluster(2, randRange(rng, 0.72, 1.02));
-  if (rng() > 0.42) addCluster(1, randRange(rng, 0.52, 0.88));
+  addCluster(3, randRange(rng, 1.08, 1.32), [1, 0, 2]);
+  if (rng() > 0.4) addCluster(3, randRange(rng, 0.82, 1.05), [4, 3, 2]);
+  else addCluster(2, randRange(rng, 0.78, 1.0), [4, 2]);
+  if (rng() > 0.42) addCluster(1, randRange(rng, 0.55, 0.85), [2]);
 
   return stones;
 }

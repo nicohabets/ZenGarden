@@ -434,7 +434,7 @@ export class ZenGarden {
     for (const s of this.stones.stones) {
       if ((s.x - x) ** 2 + (s.z - z) ** 2 < 0.55) return false;
     }
-    if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.45) return false;
+    if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.7) return false;
     if ((this.basinState.x - x) ** 2 + (this.basinState.z - z) ** 2 < 1.2) return false;
     for (const l of this.lanternStates) {
       if ((l.x - x) ** 2 + (l.z - z) ** 2 < 0.7) return false;
@@ -456,7 +456,7 @@ export class ZenGarden {
 
   private blockers(): Blocker[] {
     const list: Blocker[] = [
-      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.88 },
+      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 1.05 },
       { x: this.basinState.x, z: this.basinState.z, r: 0.75 },
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });

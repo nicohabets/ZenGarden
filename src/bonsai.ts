@@ -136,14 +136,14 @@ export class Bonsai {
     const twig = new THREE.MeshStandardMaterial({ color: 0x3d2c20, roughness: 0.92 });
 
     const pot = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.52, 0.44, 0.32, 22),
+      new THREE.CylinderGeometry(0.62, 0.52, 0.36, 22),
       new THREE.MeshStandardMaterial({
         color: 0x6d3a32,
         roughness: 0.45,
         metalness: 0.08,
       }),
     );
-    pot.position.y = 0.18;
+    pot.position.y = 0.2;
     pot.castShadow = true;
     pot.receiveShadow = true;
     pot.userData.kind = "bonsai";
@@ -151,10 +151,10 @@ export class Bonsai {
     this.pickables.push(pot);
 
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.52, 0.04, 8, 24),
+      new THREE.TorusGeometry(0.62, 0.045, 8, 24),
       new THREE.MeshStandardMaterial({ color: 0x5a2f2a, roughness: 0.5 }),
     );
-    rim.position.y = 0.34;
+    rim.position.y = 0.38;
     rim.rotation.x = Math.PI / 2;
     rim.userData.kind = "bonsai";
     this.group.add(rim);
@@ -164,24 +164,24 @@ export class Bonsai {
       color: 0x3b3226,
       roughness: 1,
     });
-    const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.05, 16), this.soil);
-    soil.position.y = 0.34;
+    const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.05, 16), this.soil);
+    soil.position.y = 0.38;
     soil.userData.kind = "bonsai";
     this.group.add(soil);
     this.pickables.push(soil);
 
-    const lean = randRange(rng, -0.14, 0.14);
+    const lean = randRange(rng, -0.16, 0.16);
     const trunkPts: THREE.Vector3[] = [];
     for (let i = 0; i < 12; i++) {
       const t = i / 11;
-      const y = 0.34 + t * 1.78;
-      const x = Math.sin(t * Math.PI * 1.2) * 0.3 + lean * t;
-      const z = Math.sin(t * Math.PI * 0.75 + 0.45) * 0.16;
+      const y = 0.38 + t * 2.15;
+      const x = Math.sin(t * Math.PI * 1.15) * 0.38 + lean * t;
+      const z = Math.sin(t * Math.PI * 0.75 + 0.45) * 0.2;
       trunkPts.push(new THREE.Vector3(x, y, z));
     }
     const trunkCurve = new THREE.CatmullRomCurve3(trunkPts);
-    const trunkGeo = new THREE.TubeGeometry(trunkCurve, 28, 0.1, 8, false);
-    taperTube(trunkGeo, 28, 8, 1.12, 0.34);
+    const trunkGeo = new THREE.TubeGeometry(trunkCurve, 28, 0.132, 8, false);
+    taperTube(trunkGeo, 28, 8, 1.2, 0.36);
     const trunk = new THREE.Mesh(trunkGeo, bark);
     trunk.castShadow = true;
     trunk.userData.kind = "bonsai";
@@ -191,8 +191,8 @@ export class Bonsai {
     for (let r = 0; r < 4; r++) {
       const a = (r / 4) * Math.PI * 2 + rng() * 0.3;
       const start = trunkPts[0].clone();
-      const end = start.clone().add(new THREE.Vector3(Math.cos(a) * 0.22, -0.08, Math.sin(a) * 0.22));
-      const root = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([start, end]), 5, 0.028, 5, false), bark);
+      const end = start.clone().add(new THREE.Vector3(Math.cos(a) * 0.28, -0.1, Math.sin(a) * 0.28));
+      const root = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([start, end]), 5, 0.036, 5, false), bark);
       root.castShadow = true;
       root.userData.kind = "bonsai";
       this.group.add(root);
@@ -202,10 +202,10 @@ export class Bonsai {
     let foliageIndex = 0;
     const addFoliage = (at: THREE.Vector3, spread: number) => {
       const id = `f${foliageIndex++}`;
-      const restScale = randRange(rng, 0.88, 1.18);
+      const restScale = randRange(rng, 0.95, 1.22);
       const flatten = randRange(rng, 0.62, 0.78);
       const foliage = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(randRange(rng, 0.16, 0.26), 1),
+        new THREE.IcosahedronGeometry(randRange(rng, 0.2, 0.32), 1),
         new THREE.MeshStandardMaterial({
           color: SEASON_COLORS[this.season][foliageIndex % 4],
           roughness: 0.78,
@@ -232,12 +232,12 @@ export class Bonsai {
       const origin = trunkCurve.getPoint(t);
       const side = b % 2 === 0 ? 1 : -1;
       const yaw = side * (0.65 + rng() * 0.85) + b * 0.35;
-      const reach = (1.12 - t * 0.42) * randRange(rng, 0.42, 0.78);
+      const reach = (1.35 - t * 0.4) * randRange(rng, 0.52, 0.92);
       const dir = new THREE.Vector3(Math.cos(yaw), randRange(rng, 0.06, 0.36) * (t > 0.78 ? 0.7 : 1), Math.sin(yaw)).normalize();
       const mid = origin.clone().addScaledVector(dir, reach * 0.55);
       mid.y += randRange(rng, -0.04, 0.08);
       const end = origin.clone().addScaledVector(dir, reach);
-      const branchGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([origin, mid, end]), 10, 0.028, 6, false);
+      const branchGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([origin, mid, end]), 10, 0.038, 6, false);
       taperTube(branchGeo, 10, 6, 1, 0.42);
       const branch = new THREE.Mesh(branchGeo, bark);
       branch.castShadow = true;

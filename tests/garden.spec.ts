@@ -184,7 +184,8 @@ test.describe("Zen Garden", () => {
     expect(layout.stats.count).toBeGreaterThanOrEqual(5);
     expect(layout.stats.clustered).toBeGreaterThanOrEqual(5);
     expect(layout.stats.tilted).toBeGreaterThanOrEqual(4);
-    expect(layout.stats.minDist).toBeLessThan(0.95);
+    expect(layout.stats.minDist).toBeGreaterThan(0.55);
+    expect(layout.stats.minDist).toBeLessThan(1.35);
     expect(layout.stats.scaleMax / Math.max(0.01, layout.stats.scaleMin)).toBeGreaterThan(1.35);
     expect(layout.foliage).toBeGreaterThan(18);
     expect(layout.stones.some((s) => typeof s.tiltX === "number" && typeof s.tiltZ === "number")).toBe(true);
