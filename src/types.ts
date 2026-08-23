@@ -8,6 +8,9 @@ export interface StoneState {
   rotY: number;
   scale: number;
   variant: number;
+  tiltX?: number;
+  tiltZ?: number;
+  cluster?: number;
 }
 
 export interface MossState {
@@ -76,15 +79,26 @@ export interface Blocker {
   r: number;
 }
 
+export interface StoneStats {
+  count: number;
+  minDist: number;
+  scaleMin: number;
+  scaleMax: number;
+  tilted: number;
+  clustered: number;
+}
+
 export interface ZenGardenAPI {
   ready: boolean;
   getSeed(): number;
   getTool(): ToolId;
   setTool(id: ToolId): void;
   getStoneCount(): number;
+  getStoneStats(): StoneStats;
   placeStoneAt(x: number, z: number): boolean;
   getSave(): GardenSave | null;
   newGarden(): void;
+  plantSeed(seed: number): void;
   getSeason(): Season;
   getLanternCount(): number;
   getFoliageCount(): number;

@@ -25,10 +25,10 @@ export function generateWorld(seed: number): GeneratedWorld {
   };
 
   const occupied: { p: Point; r: number }[] = [{ p: { x: basin.x, z: basin.z }, r: 1.15 }];
-  const bonsaiPos = place(rng, occupied, 1.35, 1.6);
+  const bonsaiPos = place(rng, occupied, 1.7, 2.2);
   bonsai.x = bonsaiPos.x;
   bonsai.z = bonsaiPos.z;
-  occupied.push({ p: bonsaiPos, r: 1.05 });
+  occupied.push({ p: bonsaiPos, r: 1.4 });
 
   const lanternCount = rng() > 0.35 ? 2 : 1;
   const lanterns: LanternState[] = [];
@@ -43,34 +43,20 @@ export function generateWorld(seed: number): GeneratedWorld {
     occupied.push({ p, r: 0.55 });
   }
 
-  const stoneCount = randInt(rng, 5, 9);
-  const stones: StoneState[] = [];
-  for (let i = 0; i < stoneCount; i++) {
-    const p = place(rng, occupied, 0.85, 1.15);
-    const scale = randRange(rng, 0.55, 1.25);
-    stones.push({
-      id: `s${i}`,
-      x: p.x,
-      z: p.z,
-      rotY: rng() * Math.PI * 2,
-      scale,
-      variant: randInt(rng, 0, 11),
-    });
-    occupied.push({ p, r: 0.45 + scale * 0.28 });
-  }
+  const stones = placeIshiGumi(rng, occupied);
 
   const moss: MossState[] = [];
   let mi = 0;
   for (const stone of stones) {
-    if (rng() > 0.62) continue;
+    if (rng() > 0.55) continue;
     const angle = rng() * Math.PI * 2;
-    const dist = 0.45 + stone.scale * 0.25;
+    const dist = 0.4 + stone.scale * 0.22;
     moss.push({
       id: `m${mi++}`,
       x: stone.x + Math.cos(angle) * dist,
       z: stone.z + Math.sin(angle) * dist,
       rotY: rng() * Math.PI * 2,
-      scale: randRange(rng, 0.55, 1.05),
+      scale: randRange(rng, 0.5, 0.95),
     });
   }
   if (rng() > 0.35) {
@@ -84,6 +70,46 @@ export function generateWorld(seed: number): GeneratedWorld {
   }
 
   return { seed, stones, moss, basin, bonsai, lanterns };
+}
+
+function placeIshiGumi(rng: () => number, occupied: { p: Point; r: number }[]): StoneState[] {
+  const stones: StoneState[] = [];
+  let nextId = 0;
+  let clusterId = 0;
+
+  const addCluster = (count: number, mainScale: number, preferred: number[]) => {
+    const spread = 0.85 + mainScale * 0.35;
+    const origin = place(rng, occupied, 0.85 + spread, 1.3);
+    occupied.push({ p: origin, r: 0.7 + spread });
+    const heading = rng() * Math.PI * 2;
+    const id = clusterId++;
+    const angles = [0, 0.55, -1.15, 2.3];
+
+    for (let i = 0; i < count; i++) {
+      const scale = i === 0 ? mainScale : mainScale * randRange(rng, 0.48, 0.72);
+      const dist = i === 0 ? 0 : 0.72 + scale * 0.28 + mainScale * 0.12;
+      const angle = heading + angles[i] + randRange(rng, -0.08, 0.08);
+      const variant = preferred[i] ?? randInt(rng, 0, 11);
+      stones.push({
+        id: `s${nextId++}`,
+        x: origin.x + Math.cos(angle) * dist,
+        z: origin.z + Math.sin(angle) * dist,
+        rotY: rng() * Math.PI * 2,
+        tiltX: randRange(rng, -0.12, 0.1),
+        tiltZ: randRange(rng, -0.1, 0.1),
+        scale,
+        variant,
+        cluster: id,
+      });
+    }
+  };
+
+  addCluster(3, randRange(rng, 1.08, 1.32), [1, 0, 2]);
+  if (rng() > 0.4) addCluster(3, randRange(rng, 0.82, 1.05), [4, 3, 2]);
+  else addCluster(2, randRange(rng, 0.78, 1.0), [4, 2]);
+  if (rng() > 0.42) addCluster(1, randRange(rng, 0.55, 0.85), [2]);
+
+  return stones;
 }
 
 export function nextStoneId(stones: StoneState[]): string {

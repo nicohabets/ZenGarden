@@ -141,7 +141,7 @@ test.describe("Zen Garden", () => {
       season: window.__ZEN_GARDEN__!.getSeason(),
     }));
     expect(start.lanterns).toBeGreaterThan(0);
-    expect(start.foliage).toBeGreaterThan(5);
+    expect(start.foliage).toBeGreaterThan(18);
     expect(["spring", "summer", "autumn", "winter"]).toContain(start.season);
     await expect(page.getByTestId("season")).toHaveAttribute("data-season", start.season);
 
@@ -165,5 +165,35 @@ test.describe("Zen Garden", () => {
     }));
     expect(restored.season).toBe("summer");
     expect(restored.lanterns).toBe(afterWater.lanterns);
+  });
+
+  test("stones cluster naturally and the bonsai is densely leaved", async ({ page }) => {
+    await page.goto("/");
+    await waitForGarden(page);
+
+    const layout = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const save = api.getSave();
+      return {
+        stats: api.getStoneStats(),
+        foliage: api.getFoliageCount(),
+        stones: save?.stones ?? [],
+      };
+    });
+
+    expect(layout.stats.count).toBeGreaterThanOrEqual(5);
+    expect(layout.stats.clustered).toBeGreaterThanOrEqual(5);
+    expect(layout.stats.tilted).toBeGreaterThanOrEqual(4);
+    expect(layout.stats.minDist).toBeGreaterThan(0.55);
+    expect(layout.stats.minDist).toBeLessThan(1.35);
+    expect(layout.stats.scaleMax / Math.max(0.01, layout.stats.scaleMin)).toBeGreaterThan(1.35);
+    expect(layout.foliage).toBeGreaterThan(18);
+    expect(layout.stones.some((s) => typeof s.tiltX === "number" && typeof s.tiltZ === "number")).toBe(true);
+    expect(layout.stones.some((s) => s.cluster === 0)).toBe(true);
+
+    const stored = await page.evaluate(() => window.localStorage.getItem("zengarden.v1"));
+    expect(stored).toBeTruthy();
+    expect(stored!).toContain('"tiltX"');
+    expect(stored!).toContain('"cluster"');
   });
 });
