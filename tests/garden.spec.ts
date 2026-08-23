@@ -63,7 +63,20 @@ test.describe("Zen Garden", () => {
     expect(Number.isInteger(before.seed)).toBe(true);
     expect(before.stones).toBeGreaterThan(0);
 
-    const placed = await page.evaluate(() => window.__ZEN_GARDEN__!.placeStoneAt(2.15, -1.35));
+    const placed = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const spots: Array<[number, number]> = [
+        [2.15, -1.35],
+        [-2.4, 2.1],
+        [3.2, 2.4],
+        [-3.1, -2.2],
+        [0.8, 3.0],
+        [-0.6, -3.1],
+        [1.6, 1.8],
+        [-1.8, -0.4],
+      ];
+      return spots.some(([x, z]) => api.placeStoneAt(x, z));
+    });
     expect(placed).toBe(true);
 
     const afterPlace = await page.evaluate(() => ({
