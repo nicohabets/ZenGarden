@@ -585,6 +585,10 @@ export class ZenGarden {
         this.plant(freshSeed());
         this.scheduleSave(true);
       },
+      plantSeed: (seed) => {
+        this.plant((seed >>> 0) || 1);
+        this.scheduleSave(true);
+      },
       getSeason: () => seasonFromBonsai(this.bonsaiState),
       getLanternCount: () => this.lanternStates.length,
       getFoliageCount: () => this.bonsai.foliage.size,

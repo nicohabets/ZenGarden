@@ -98,6 +98,7 @@ export interface ZenGardenAPI {
   placeStoneAt(x: number, z: number): boolean;
   getSave(): GardenSave | null;
   newGarden(): void;
+  plantSeed(seed: number): void;
   getSeason(): Season;
   getLanternCount(): number;
   getFoliageCount(): number;
