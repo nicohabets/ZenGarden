@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#e6dfd1" />
+    <meta
+      name="description"
+      content="A calm isometric zen garden. Rake sand, place stones, and tend a bonsai. Free, no account — your garden is saved in this browser."
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Zen Garden</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app" data-game-ready="false" data-webgl="pending">
+      <canvas id="garden-canvas" data-testid="garden-canvas" aria-label="Zen garden"></canvas>
+
+      <div id="loading" data-testid="loading">preparing the garden…</div>
+
+      <header class="topbar">
+        <h1>Zen Garden</h1>
+        <div class="top-actions">
+          <span id="seed-label" data-testid="seed-label" class="seed">seed</span>
+          <button id="btn-mute" type="button" data-testid="mute-btn" aria-pressed="false" aria-label="Mute ambient sound">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 10v4h3l5 4V6L7 10H4zm12.5 2a4.5 4.5 0 0 0-2.3-3.9v7.8a4.5 4.5 0 0 0 2.3-3.9zm-2.3-8v2.1A7.5 7.5 0 0 1 20 12a7.5 7.5 0 0 1-5.8 7.3V21A9.5 9.5 0 0 0 22 12a9.5 9.5 0 0 0-7.8-8z"
+              />
+            </svg>
+            <span class="mute-label">Sound on</span>
+          </button>
+          <button id="btn-new" type="button" data-testid="new-garden-btn">New garden</button>
+        </div>
+      </header>
+
+      <p id="hint" data-testid="hint" class="hint">Draw grooves through the sand</p>
+
+      <div id="saved" data-testid="saved" data-show="false">saved in this browser</div>
+
+      <nav id="toolbar" data-testid="toolbar" data-tool-active="rake" aria-label="Garden tools">
+        <button type="button" data-tool="rake" data-testid="tool-rake" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 18h16M6 18V8m3 10V7m3 11V6m3 12V7m3 11V8" />
+          </svg>
+          <span>Rake</span>
+        </button>
+        <button type="button" data-tool="stone" data-testid="tool-stone" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 15c1-4 4-7 8-7s6 2 8 6-2 5-8 5-9-1-8-4z" />
+          </svg>
+          <span>Stone</span>
+        </button>
+        <button type="button" data-tool="water" data-testid="tool-water" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3s6 7 6 11a6 6 0 1 1-12 0c0-4 6-11 6-11z" />
+          </svg>
+          <span>Water</span>
+        </button>
+        <button type="button" data-tool="prune" data-testid="tool-prune" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 8a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm12 0a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM8.5 12 12 4l3.5 8" />
+          </svg>
+          <span>Prune</span>
+        </button>
+        <button type="button" data-tool="place" data-testid="tool-place" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 4h8v3H8zM7 8h10l1 10H6L7 8zm5 3v5" />
+          </svg>
+          <span>Bonsai</span>
+        </button>
+      </nav>
+
+      <div id="new-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-labelledby="dialog-title">
+        <div class="dialog-card" data-testid="new-dialog">
+          <h2 id="dialog-title">A new garden?</h2>
+          <p>Your current garden is already kept in this browser. Begin again only if you want a fresh layout.</p>
+          <div class="dialog-actions">
+            <button id="btn-keep" type="button" data-testid="keep-garden-btn">Keep this garden</button>
+            <button id="btn-begin" type="button" data-testid="begin-garden-btn">Begin a new garden</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

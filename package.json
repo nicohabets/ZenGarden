@@ -1,0 +1,29 @@
+{
+  "name": "zen-garden",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A calm isometric zen garden. Rake sand, place stones, tend a bonsai.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name zen-garden",
+    "cf:preview": "npm run build && wrangler pages dev dist"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.1",
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "wrangler": "^4.14.4"
+  }
+}
