@@ -82,7 +82,7 @@ export class GrainCloud {
     const spanZ = Math.max(0.1, z1 - z0);
     const surfaceBudget = Math.floor(this.maxCount * 0.82);
     const spacing = Math.max(0.0014, Math.sqrt((spanX * spanZ) / Math.max(8, surfaceBudget)));
-    const worldSize = spacing * 1.55;
+    const worldSize = spacing * 1.78;
 
     const hex = spacing * 0.86602540378;
     let n = 0;
@@ -128,7 +128,7 @@ export class GrainCloud {
     const spanX = Math.max(0.1, bounds.x1 - bounds.x0);
     const spanZ = Math.max(0.1, bounds.z1 - bounds.z0);
     const spacing = Math.max(0.0014, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.82))));
-    this.writeInstances(sand, spacing * 1.55);
+    this.writeInstances(sand, spacing * 1.78);
   }
 
   private writeInstances(sand: SandField, worldSize: number): void {
