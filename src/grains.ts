@@ -88,9 +88,9 @@ export class GrainCloud {
 
     let n = 0;
     let row = 0;
-    const jitter = hq && cam.zoom < 1.25 ? 0.22 : 0.38;
+    const jitter = close ? 0.72 : 0.5;
     for (let z = z0; z <= z1 && n < cellBudget; z += spacing, row++) {
-      const rowShift = (row % 2) * spacing * 0.5;
+      const rowShift = close ? hash2(row, 9) * spacing : (row % 2) * spacing * 0.5;
       for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
         const col = ((x - x0) / spacing) | 0;
         const hx = hash2(row * 19 + 3, col * 11 + 5);
@@ -166,7 +166,7 @@ export class GrainCloud {
       }
     }
 
-    const bankLayers = hq ? 5 : 3;
+    const bankLayers = hq ? 7 : 4;
     sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, tx, tz, h) => {
       if (n >= this.maxCount) return;
       const across = Math.hypot(tx, tz) || 1;
