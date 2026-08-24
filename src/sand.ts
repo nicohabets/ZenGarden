@@ -104,13 +104,13 @@ export class SandField {
       roughness: 0.96,
       metalness: 0,
       displacementMap: this.texture,
-      displacementScale: H_RANGE * 0.68,
-      displacementBias: H_MIN * 0.68,
+      displacementScale: H_RANGE * 0.9,
+      displacementBias: H_MIN * 0.9,
       envMapIntensity: 0,
       emissive: 0x2a261e,
       emissiveIntensity: 0.08,
     });
-    this.look = applyPackedSandShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE * 0.68);
+    this.look = applyPackedSandShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE * 0.9);
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
@@ -660,7 +660,7 @@ export class SandField {
         let h = this.sampleBilinear(fi, fj);
         const ix = this.clampI(Math.floor(fi));
         const jz = this.clampJ(Math.floor(fj));
-        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.02 - 0.01;
+        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.028 - 0.014;
         h += grain;
         const dx = this.sampleDirX(ix, jz);
         const dz = this.sampleDirZ(ix, jz);

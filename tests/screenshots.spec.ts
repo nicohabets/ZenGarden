@@ -64,7 +64,7 @@ test.describe("screenshots", () => {
       window.__ZEN_GARDEN__!.setCamera({
         azimuth: 0.78,
         elevation: 0.58,
-        zoom: 5.6,
+        zoom: 4.15,
         tx: 0.15,
         tz: 0.12,
       });
