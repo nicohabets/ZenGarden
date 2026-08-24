@@ -38,14 +38,14 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.88,
-        elevation: 0.34,
-        zoom: 0.56,
-        tx: -3.15,
-        tz: 2.05,
+        azimuth: 0.96,
+        elevation: 0.22,
+        zoom: 0.42,
+        tx: -3.05,
+        tz: 1.9,
       });
     });
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(350);
     await page.screenshot({ path: `${outDir}/gravel-close.png`, animations: "disabled" });
 
     await page.evaluate((look) => {
@@ -57,8 +57,20 @@ test.describe("screenshots", () => {
         tz: look.cz + 0.22,
       });
     }, island);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(250);
     await page.screenshot({ path: `${outDir}/island-rings.png`, animations: "disabled" });
+
+    await page.evaluate(() => {
+      window.__ZEN_GARDEN__!.setCamera({
+        azimuth: 0.78,
+        elevation: 0.58,
+        zoom: 5.6,
+        tx: 0.15,
+        tz: 0.12,
+      });
+    });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${outDir}/desktop-hud.png`, animations: "disabled" });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate((look) => {

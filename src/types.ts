@@ -131,6 +131,7 @@ export interface ZenGardenAPI {
   getSandVolume(): number;
   settleSand(steps?: number): void;
   getSandTone(): SandTone;
+  getGrainCount(): number;
   getPerf(): PerfStats;
   getMossCount(): number;
   getCamera(): CameraState;

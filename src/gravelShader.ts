@@ -1,10 +1,11 @@
 import * as THREE from "three";
 
 /**
- * Height-field shading over a pebble atlas: troughs darken, crests catch
- * light, and a grain-scale nick breaks the plastic-rail silhouette.
+ * Court bed under the instanced grains: pale angular grit in world space,
+ * plus grain-scale vertex nicks so a ridge is not a smooth extruded rail.
+ * This is the filler between shards — not the hero sand.
  */
-export function applyGravelShader(
+export function applySandBedShader(
   mat: THREE.MeshStandardMaterial,
   field: THREE.DataTexture,
   gardenW: number,
@@ -17,24 +18,55 @@ export function applyGravelShader(
     shader.uniforms.uHeightRange = { value: heightRange };
     shader.uniforms.uTexel = { value: new THREE.Vector2(1 / field.image.width, 1 / field.image.height) };
 
-    const hashLib = `
+    const lib = `
          float hash12(vec2 p) {
            vec3 p3 = fract(vec3(p.xyx) * .1031);
            p3 += dot(p3, p3.yzx + 33.33);
            return fract((p3.x + p3.y) * p3.z);
          }
+         vec2 hash22(vec2 p) {
+           float n = hash12(p);
+           return vec2(n, hash12(p + 19.1));
+         }
+         vec4 gritCell(vec2 world, float scale) {
+           vec2 g = world * scale;
+           vec2 n = floor(g);
+           vec2 f = fract(g);
+           float md = 8.0;
+           vec2 best = vec2(0.0);
+           vec2 cell = n;
+           for (int j = -1; j <= 1; j++) {
+             for (int i = -1; i <= 1; i++) {
+               vec2 off = vec2(float(i), float(j));
+               vec2 o = hash22(n + off);
+               vec2 r = off + o - f;
+               float d = dot(r, r);
+               if (d < md) {
+                 md = d;
+                 best = r;
+                 cell = n + off;
+               }
+             }
+           }
+           float id = hash12(cell);
+           float edge = smoothstep(0.012, 0.09, sqrt(md));
+           return vec4(id, edge, best);
+         }
     `;
 
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\n${hashLib}`)
+      .replace("#include <common>", `#include <common>\n${lib}`)
       .replace(
         "#include <displacementmap_vertex>",
         `#include <displacementmap_vertex>
          {
-           vec2 cell = floor(transformed.xz * 96.0);
+           vec2 cell = floor(transformed.xz * 220.0);
            float nick = hash12(cell) - 0.5;
-           float nick2 = hash12(cell + 9.1) - 0.5;
-           transformed.y += nick * 0.007 + nick2 * 0.003;
+           float nick2 = hash12(cell + 17.3) - 0.5;
+           float nick3 = hash12(cell * 1.7 + 4.2) - 0.5;
+           transformed.y += nick * 0.0055 + nick2 * 0.003 + nick3 * 0.0016;
+           transformed.x += nick2 * 0.0018;
+           transformed.z += nick * 0.0018;
          }
         `,
       );
@@ -47,13 +79,14 @@ export function applyGravelShader(
          uniform vec2 uGarden;
          uniform float uHeightRange;
          uniform vec2 uTexel;
-         ${hashLib}
+         ${lib}
         `,
       )
       .replace(
         "#include <map_fragment>",
         `#include <map_fragment>
          vec2 uv = vMapUv;
+         vec2 world = (uv - 0.5) * uGarden;
          vec4 fieldS = texture2D(uField, uv);
          float h = fieldS.r;
          float hL = texture2D(uField, uv + vec2(-uTexel.x, 0.0)).r;
@@ -61,14 +94,18 @@ export function applyGravelShader(
          float hD = texture2D(uField, uv + vec2(0.0, -uTexel.y)).r;
          float hU = texture2D(uField, uv + vec2(0.0, uTexel.y)).r;
          float curve = 4.0 * h - hL - hR - hD - hU;
-         float trough = clamp(-curve * 3.4, 0.0, 1.0);
-         float crest = clamp(curve * 3.4, 0.0, 1.0);
-         float slope = (hR - hL) * 3.6 + (hU - hD) * 1.6;
-         vec3 col = diffuseColor.rgb;
-         col *= 0.78 + clamp(0.5 + slope, 0.0, 1.0) * 0.44;
-         col *= mix(1.0, 0.62, trough);
-         col *= mix(1.0, 1.12, crest);
-         col += vec3(0.05, 0.042, 0.028) * crest;
+         float trough = clamp(-curve * 3.2, 0.0, 1.0);
+         float crest = clamp(curve * 3.2, 0.0, 1.0);
+         vec4 g0 = gritCell(world, 240.0);
+         vec4 g1 = gritCell(world + vec2(0.31, 0.17), 118.0);
+         vec3 pale = vec3(0.93, 0.90, 0.85);
+         vec3 mid = vec3(0.86, 0.83, 0.77);
+         vec3 deep = vec3(0.62, 0.58, 0.53);
+         vec3 col = mix(mid, pale, g0.x);
+         col = mix(col, mix(deep, mid, g1.x), 0.22);
+         col *= mix(0.72, 1.0, g0.y);
+         col *= mix(1.0, 0.58, trough);
+         col *= mix(1.0, 1.08, crest);
          diffuseColor.rgb = col;
         `,
       )
@@ -77,17 +114,18 @@ export function applyGravelShader(
         `#include <normal_fragment_maps>
          {
            vec2 uvN = vMapUv;
+           vec2 worldN = (uvN - 0.5) * uGarden;
            vec4 fld = texture2D(uField, uvN);
            vec3 hx = vec3(uGarden.x * uTexel.x, (texture2D(uField, uvN + vec2(uTexel.x, 0.0)).r - fld.r) * uHeightRange, 0.0);
            vec3 hz = vec3(0.0, (texture2D(uField, uvN + vec2(0.0, uTexel.y)).r - fld.r) * uHeightRange, uGarden.y * uTexel.y);
            vec3 slopeN = normalize(cross(hz, hx));
-           vec2 cellN = floor((uvN - 0.5) * uGarden * 96.0);
-           vec3 grainN = normalize(vec3(hash12(cellN) - 0.5, 1.05, hash12(cellN + 5.2) - 0.5));
-           normal = normalize(mix(normal, slopeN, 0.42));
-           normal = normalize(mix(normal, grainN, 0.38));
+           vec4 cell = gritCell(worldN, 240.0);
+           vec3 gritN = normalize(vec3(cell.z, 0.85, cell.w));
+           normal = normalize(mix(normal, slopeN, 0.38));
+           normal = normalize(mix(normal, gritN, 0.46));
          }
         `,
       );
   };
-  mat.customProgramCacheKey = () => "gravel-heightfield-v6-atlas";
+  mat.customProgramCacheKey = () => "sand-bed-grit-v1";
 }

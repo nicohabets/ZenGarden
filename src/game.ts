@@ -6,6 +6,7 @@ import { generateWorld, inBounds, nextStoneId } from "./generate";
 import { FrameMeter } from "./perf";
 import { loadSave, writeSave } from "./persistence";
 import { RakeGuide, type RakeIsland, type RakePiece } from "./rake";
+import { GrainBed } from "./grains";
 import { SandField } from "./sand";
 import {
   createApron,
@@ -58,6 +59,7 @@ export class ZenGarden {
   private readonly cam = new CameraRig();
   private readonly ui = new GardenUI();
   private readonly sand: SandField;
+  private readonly grains: GrainBed;
   private readonly rakeGuide = new RakeGuide();
   private readonly stones = new StoneField();
 
@@ -108,6 +110,7 @@ export class ZenGarden {
     this.scene.fog = new THREE.Fog(0xddd6c8, 24, 56);
 
     this.sand = new SandField();
+    this.grains = new GrainBed((x, z) => this.sand.sampleHeight(x, z), this.softwareGL);
     this.seed = freshSeed();
 
     this.lights();
@@ -116,6 +119,7 @@ export class ZenGarden {
     this.scene.add(createFrame());
     this.scene.add(createBackdrop());
     this.scene.add(this.sand.mesh);
+    this.scene.add(this.grains.group);
     this.scene.add(this.stones.group);
 
     this.bindUi();
@@ -164,6 +168,9 @@ export class ZenGarden {
     this.sand.embedOccupants(this.occupants());
     this.sand.settle(12);
     this.sand.flush();
+    this.grains.setBlockers(this.blockers());
+    this.grains.rebuild();
+    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom);
     this.settleOccupants();
     this.meter.plantMs = performance.now() - t0;
     this.ui.setSeed(seed);
@@ -188,6 +195,9 @@ export class ZenGarden {
     }
     this.cam.applyState(save.camera);
     this.sand.flush();
+    this.grains.setBlockers(this.blockers());
+    this.grains.rebuild();
+    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom);
     this.settleOccupants();
     this.ui.setSeed(save.seed);
   }
@@ -418,6 +428,7 @@ export class ZenGarden {
       if (this.dragId) {
         const s = this.stones.get(this.dragId);
         if (s) this.sand.bankObject(s.x, s.z, 0.28 + s.scale * 0.2, 0.016, 0.018);
+        this.grains.setBlockers(this.blockers());
       }
       this.sand.queueSlump(4);
       this.scheduleSave(true);
@@ -460,6 +471,7 @@ export class ZenGarden {
       variant: Math.floor(Math.random() * 12),
     };
     this.stones.add(state);
+    this.grains.setBlockers(this.blockers());
     this.sand.bankObject(x, z, 0.28 + state.scale * 0.2, 0.016, 0.018);
     this.sand.queueSlump(3);
     this.scheduleSave(true);
@@ -610,7 +622,9 @@ export class ZenGarden {
     this.waterTime += dt;
     this.sand.stepSlump(dt);
     if (this.sand.consumeOccupantSettle()) this.settleOccupants();
-    this.sand.flush();
+    const packed = this.sand.flush();
+    if (packed) this.grains.syncRegion(this.sand.dirtyWorld());
+    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom);
     this.bonsai.update(performance.now(), this.clock.elapsedTime);
     if (this.basinGroup) updateWater(this.basinGroup, this.waterTime);
     if (this.lanternGroup) updateLanterns(this.lanternGroup, this.waterTime);
@@ -656,6 +670,7 @@ export class ZenGarden {
       rakeFromTo: (x1, z1, x2, z2) => {
         this.sand.rake(x1, z1, x2, z2, this.blockers());
         this.sand.flush();
+        this.grains.syncRegion(this.sand.dirtyWorld());
         this.scheduleSave(true);
       },
       rakeStroke: (points) => this.playRakeStroke(points),
@@ -666,10 +681,12 @@ export class ZenGarden {
       settleSand: (steps) => {
         this.sand.settle(steps ?? 8);
         this.sand.flush();
+        this.grains.syncRegion(this.sand.dirtyWorld());
         this.settleOccupants();
         this.scheduleSave(true);
       },
       getSandTone: () => this.sand.getSandTone(),
+      getGrainCount: () => this.grains.getCount(),
       getPerf: () => this.readPerf(),
       getMossCount: () => this.mossStates.length,
       getCamera: () => this.cam.toState(),
@@ -682,10 +699,12 @@ export class ZenGarden {
           tx: state.tx ?? cur.tx,
           tz: state.tz ?? cur.tz,
         });
+        this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom);
         this.scheduleSave(true);
       },
       dolly: (delta) => {
         this.cam.dolly(delta);
+        this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom);
         this.scheduleSave();
       },
     };
@@ -702,6 +721,7 @@ export class ZenGarden {
     }
     this.sand.settle(4);
     this.sand.flush();
+    this.grains.syncRegion(this.sand.dirtyWorld());
     this.settleOccupants();
     this.scheduleSave(true);
     return guide.mode;

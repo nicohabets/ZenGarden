@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { chooseDisplayGrid, chooseSimGrid } from "./device";
-import { createGravelAtlas } from "./gravelAtlas";
-import { applyGravelShader } from "./gravelShader";
+import { applySandBedShader } from "./gravelShader";
 import { mulberry32 } from "./rng";
 import { GARDEN, type Blocker, type SandTone } from "./types";
 
@@ -39,8 +38,8 @@ interface Rect {
 }
 
 /**
- * Volumetric gravel court: a CPU height field with conservation rake,
- * angle-of-repose slump, and a GPU-displaced mesh shaded as pale pebbles.
+ * Court mass: a CPU height field with conservation rake and angle-of-repose
+ * slump. Visible grit lives on GrainBed; this mesh is the pale bed under it.
  */
 export class SandField {
   readonly mesh: THREE.Mesh;
@@ -95,20 +94,22 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const atlas = createGravelAtlas();
+    const pale = new THREE.DataTexture(new Uint8Array([236, 230, 218, 255]), 1, 1);
+    pale.colorSpace = THREE.SRGBColorSpace;
+    pale.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      map: atlas,
-      bumpMap: atlas,
-      bumpScale: 0.22,
-      roughness: 0.84,
+      map: pale,
+      roughness: 0.96,
       metalness: 0,
       displacementMap: this.texture,
       displacementScale: H_RANGE,
       displacementBias: H_MIN,
       envMapIntensity: 0,
+      emissive: 0x2a261e,
+      emissiveIntensity: 0.08,
     });
-    applyGravelShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE);
+    applySandBedShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE);
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
@@ -220,7 +221,8 @@ export class SandField {
       for (let i = i0; i <= i1; i++) {
         const idx = j * this.simW + i;
         const wobble = 1 + 0.07 * Math.sin(i * 0.37 + z * 4.1);
-        this.height[idx] += delta * wobble;
+        const jag = 0.84 + hash2(i * 17, j * 29) * 0.34;
+        this.height[idx] += delta * wobble * jag + (hash2(i + 2, j + 8) - 0.5) * 0.0024;
         this.dirX[idx] = 1;
         this.dirZ[idx] = 0;
       }
@@ -409,10 +411,23 @@ export class SandField {
     throw new Error("sand image");
   }
 
-  flush(): void {
-    if (!this.packNeeded) return;
+  flush(): boolean {
+    if (!this.packNeeded) return false;
     this.packTexture();
     this.packNeeded = false;
+    return true;
+  }
+
+  dirtyWorld(): { x0: number; z0: number; x1: number; z1: number } | "all" | null {
+    if (!this.dirty) return null;
+    const full = this.dirty.i0 <= 2 && this.dirty.j0 <= 2 && this.dirty.i1 >= this.simW - 3 && this.dirty.j1 >= this.simH - 3;
+    if (full) return "all";
+    return {
+      x0: this.iToWorld(this.dirty.i0),
+      z0: this.jToWorld(this.dirty.j0),
+      x1: this.iToWorld(this.dirty.i1),
+      z1: this.jToWorld(this.dirty.j1),
+    };
   }
 
   private importPacked(payload: string): boolean {
@@ -510,10 +525,12 @@ export class SandField {
         const px = ax + tx * t;
         const pz = az + tz * t;
         const across = (x - px) * nx + (z - pz) * nz;
-        const delta = tineProfile(across) * depth;
+        const jag = 0.8 + hash2(i * 19 + 4, j * 23 + 9) * 0.42;
+        const wobble = (hash2(i * 11, j * 13) - 0.5) * 0.014;
+        const delta = tineProfile(across + wobble) * depth * jag;
         if (Math.abs(delta) < 1e-5) continue;
         const idx = j * this.simW + i;
-        this.height[idx] += delta;
+        this.height[idx] += delta + (hash2(i + 3, j + 5) - 0.5) * 0.0028;
         this.dirX[idx] = this.dirX[idx] * 0.35 + tx * 0.65;
         this.dirZ[idx] = this.dirZ[idx] * 0.35 + tz * 0.65;
       }
@@ -554,10 +571,12 @@ export class SandField {
         if (Math.abs(across) > pad) continue;
         let ang = Math.atan2(dz, dx);
         if (!angleInSweep(ang, a0, sweep)) continue;
-        const delta = (single ? singleTine(across) : tineProfile(across)) * depth;
+        const jag = 0.8 + hash2(i * 19 + 4, j * 23 + 9) * 0.42;
+        const wobble = (hash2(i * 11, j * 13) - 0.5) * 0.014;
+        const delta = (single ? singleTine(across + wobble) : tineProfile(across + wobble)) * depth * jag;
         if (Math.abs(delta) < 1e-5) continue;
         const idx = j * this.simW + i;
-        this.height[idx] += delta;
+        this.height[idx] += delta + (hash2(i + 3, j + 5) - 0.5) * 0.0028;
         const tx = -dz / (dist || 1);
         const tz = dx / (dist || 1);
         this.dirX[idx] = this.dirX[idx] * 0.35 + tx * 0.65;

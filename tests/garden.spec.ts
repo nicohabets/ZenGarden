@@ -248,6 +248,8 @@ test.describe("Zen Garden", () => {
     expect(look.tone.luma).toBeGreaterThan(150);
     expect(look.tone.r - look.tone.b).toBeLessThan(40);
     expect(look.ring).toBeLessThan(9.5);
+    const grains = await page.evaluate(() => window.__ZEN_GARDEN__!.getGrainCount());
+    expect(grains).toBeGreaterThan(8000);
 
     const curved = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
