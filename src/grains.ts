@@ -141,10 +141,13 @@ export class GrainBed {
 
   private layoutNear(tx: number, tz: number, zoom: number, elevation = 0.4, aspect = 1.6): void {
     const stretch = 1 / Math.max(0.22, Math.sin(elevation));
-    const halfH = THREE.MathUtils.clamp(zoom * 0.7 * stretch, 0.85, 2.9);
-    const halfW = THREE.MathUtils.clamp(zoom * 0.62 * Math.max(1.15, aspect), 0.7, 2.5);
+    const viewH = zoom * 0.72 * stretch;
+    const viewW = zoom * 0.68 * Math.max(1.15, aspect);
+    const reach = THREE.MathUtils.clamp(Math.max(viewH, viewW) * 1.22, 0.95, 3.15);
+    const halfH = reach;
+    const halfW = reach;
     const area = halfW * 2 * halfH * 2;
-    const spacing = THREE.MathUtils.clamp(Math.sqrt(area / (this.maxNear * 0.84)), this.nearMinSpacing, 0.026);
+    const spacing = THREE.MathUtils.clamp(Math.sqrt(area / (this.maxNear * 0.86)), this.nearMinSpacing, 0.028);
     const cols = Math.max(8, Math.ceil((halfW * 2) / spacing));
     const rows = Math.max(8, Math.ceil((halfH * 2) / (spacing * 0.86)));
     let n = 0;
@@ -157,7 +160,8 @@ export class GrainBed {
         const x = tx + (i + hex - cols * 0.5 + jx * 0.94) * spacing;
         const z = tz + (j - rows * 0.5 + jz * 0.94) * spacing * 0.86;
         if (Math.abs(x) > GARDEN.width * 0.5 - 0.04 || Math.abs(z) > GARDEN.depth * 0.5 - 0.04) continue;
-        writePose(this.nearX, this.nearZ, this.nearRx, this.nearRy, this.nearRz, this.nearSx, this.nearSy, this.nearSz, n, x, z, i, j, 0.72);
+        const fat = hash01(i + 3, j + 9) > 0.91 ? 1.55 : 0.7;
+        writePose(this.nearX, this.nearZ, this.nearRx, this.nearRy, this.nearRz, this.nearSx, this.nearSy, this.nearSz, n, x, z, i, j, fat);
         this.nearLayer[n] = 0;
         n += 1;
       }
@@ -262,10 +266,12 @@ export class GrainBed {
       [0.93, 0.9, 0.84],
       [0.89, 0.86, 0.8],
       [0.95, 0.91, 0.85],
-      [0.86, 0.83, 0.77],
+      [0.82, 0.78, 0.72],
       [0.91, 0.88, 0.81],
-      [0.84, 0.8, 0.74],
+      [0.76, 0.72, 0.66],
       [0.98, 0.96, 0.91],
+      [0.88, 0.84, 0.76],
+      [0.8, 0.77, 0.71],
     ];
     for (let i = 0; i < count; i++) {
       const t = tones[(Math.imul(i + salt, 1103515245) >>> 0) % tones.length];
