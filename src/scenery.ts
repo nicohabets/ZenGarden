@@ -151,8 +151,8 @@ export function createMoss(states: MossState[]): THREE.Group {
     map: mossMap,
     roughness: 0.94,
     metalness: 0,
-    emissive: 0x1a2410,
-    emissiveIntensity: 0.18,
+    emissive: 0x2a3a18,
+    emissiveIntensity: 0.32,
     vertexColors: true,
   });
   for (const s of states) {

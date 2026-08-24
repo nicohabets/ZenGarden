@@ -632,7 +632,7 @@ export class SandField {
         let h = this.sampleBilinear(fi, fj);
         const ix = this.clampI(Math.floor(fi));
         const jz = this.clampJ(Math.floor(fj));
-        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.0046 - 0.0023;
+        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.0084 - 0.0042;
         h += grain;
         const dx = this.sampleDirX(ix, jz);
         const dz = this.sampleDirZ(ix, jz);

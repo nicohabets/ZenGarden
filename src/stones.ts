@@ -211,8 +211,8 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
     bumpScale: litho === "granite" ? 0.1 : 0.12,
     roughness: litho === "granite" ? 0.78 : 0.86,
     metalness: litho === "granite" ? 0.06 : 0.03,
-    emissive: litho === "granite" ? 0x5a544c : 0x3e3a36,
-    emissiveIntensity: 0.42,
+    emissive: litho === "granite" ? 0x8a8278 : 0x5c5852,
+    emissiveIntensity: 0.62,
     vertexColors: true,
     flatShading: false,
   });
