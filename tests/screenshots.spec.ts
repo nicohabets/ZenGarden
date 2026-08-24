@@ -37,11 +37,13 @@ test.describe("screenshots", () => {
     await page.waitForTimeout(400);
 
     await page.evaluate(() => {
+      // Same grazing close-up, but on packed court — the island at the
+      // end of this rake was the black void with a dotted grit rim.
       window.__ZEN_GARDEN__!.setCamera({
         azimuth: 1.52,
         elevation: 0.182,
         zoom: 0.38,
-        tx: 1.15,
+        tx: -1.85,
         tz: 1.88,
       });
     });

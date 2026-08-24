@@ -518,8 +518,8 @@ export class ZenGarden {
   }
 
   /**
-   * Grain keep-out. Moss uses the same ellipse as the green foot so grit
-   * packs to the island and never sits on the mound.
+   * Grain keep-out. Matches the moss body so grit packs to the skirt
+   * and never sits on the mound. Do not pad — that was the shoreline.
    */
   private grainBlockers(): Blocker[] {
     const list: Blocker[] = [

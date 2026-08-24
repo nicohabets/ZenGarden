@@ -26,12 +26,13 @@ function clayTexture(): THREE.CanvasTexture {
 }
 
 /**
- * Moss foot in units of `moss.scale`. Grain keep-out uses the same ellipse
- * so grit meets moss and never sits on it.
+ * Moss silhouette in units of `moss.scale`. Grain keep-out uses this
+ * ellipse. The living skirt is a few percent larger so grit tucks under
+ * moss — no pale shoreline and no grit on the mound.
  */
 export const MOSS_FOOT = { x: 0.60, z: 0.52 } as const;
-/** Extra metres beyond the mound so grain bodies stay on the court. */
-export const MOSS_GRAIN_PAD = 0.01;
+/** Keep-out matches the body. A positive pad was the beige/white halo. */
+export const MOSS_GRAIN_PAD = 0;
 
 /** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
 export function createGround(): THREE.Group {
@@ -139,20 +140,21 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
     v.z *= 0.9 + 0.08 * Math.cos(seed * 0.4 + v.x * 1.6);
     v.y = v.y * 0.38 + 0.2;
     if (v.y < 0.04) v.y = 0.04 + rng() * 0.03;
-    // Keep the mound inside the green foot / grain keep-out so grit
-    // never sits on moss and never leaves a tan gap beside it.
-    const ex = v.x / 1.05;
-    const ez = v.z / 1.04;
+    // Body stays inside the keep-out. The dropped skirt flares a little
+    // past it so the last grit row sits under moss, not as a pale ring.
+    const skirt = n.y < 0.22;
+    const limX = skirt ? 1.14 : 1.05;
+    const limZ = skirt ? 1.12 : 1.04;
+    const ex = v.x / limX;
+    const ez = v.z / limZ;
     const e = ex * ex + ez * ez;
     if (e > 1) {
       const shrink = 1 / Math.sqrt(e);
       v.x *= shrink;
       v.z *= shrink;
     }
-    // Drop the lower ring through the grit so the mound meets the court
-    // with moss, not a beige void under the overhang.
-    if (n.y < 0.12) {
-      v.y = -0.12 + rng() * 0.03;
+    if (skirt) {
+      v.y = -0.18 + rng() * 0.04;
     }
     pos.setXYZ(i, v.x, v.y, v.z);
     const c = moss.clone().lerp(mossLite, rng() * 0.55);
@@ -195,21 +197,12 @@ export function createMoss(states: MossState[]): THREE.Group {
   const mossMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: mossMap,
-    roughness: 0.94,
+    roughness: 0.96,
     metalness: 0,
-    emissive: 0x2a3a18,
-    emissiveIntensity: 0.32,
+    envMapIntensity: 0,
+    emissive: 0x243318,
+    emissiveIntensity: 0.38,
     vertexColors: true,
-  });
-  // Same green as the mound. A dark unlit disk read as a black void;
-  // a pale lit cap read as the white shoreline.
-  const mossFootMat = new THREE.MeshStandardMaterial({
-    color: 0x6a8a48,
-    map: mossMap,
-    roughness: 0.94,
-    metalness: 0,
-    emissive: 0x2a3a18,
-    emissiveIntensity: 0.32,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
@@ -219,31 +212,24 @@ export function createMoss(states: MossState[]): THREE.Group {
     island.rotation.y = s.rotY;
     island.userData.kind = "moss";
 
+    // Scale the body to the keep-out ellipse. A separate lit cylinder
+    // cap was the white shoreline; a dark disc was the close-up void.
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
-    moss.scale.set(s.scale * 0.55, s.scale * 0.32, s.scale * 0.48);
+    moss.scale.set((s.scale * MOSS_FOOT.x) / 1.05, s.scale * 0.34, (s.scale * MOSS_FOOT.z) / 1.04);
     moss.position.y = 0.01;
     moss.receiveShadow = true;
     moss.castShadow = false;
     moss.userData.kind = "moss";
     island.add(moss);
 
-    // Green foot at grit height. Same ellipse as the grain keep-out, so
-    // the court never shows a tan/grey strip between grit and moss.
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 0.16, 28, 1, false), mossFootMat);
-    foot.scale.set(s.scale * MOSS_FOOT.x + MOSS_GRAIN_PAD, 1, s.scale * MOSS_FOOT.z + MOSS_GRAIN_PAD);
-    foot.position.y = 0.03;
-    foot.receiveShadow = true;
-    foot.userData.kind = "moss";
-    island.add(foot);
-
     const pillows = 2 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {
       const bump = new THREE.Mesh(islandGeometry(seed ^ (17 + p * 13)), mossMat);
-      bump.scale.set(s.scale * randRange(rng, 0.16, 0.28), s.scale * randRange(rng, 0.08, 0.14), s.scale * randRange(rng, 0.14, 0.24));
+      bump.scale.set(s.scale * randRange(rng, 0.14, 0.22), s.scale * randRange(rng, 0.07, 0.12), s.scale * randRange(rng, 0.12, 0.2));
       bump.position.set(
-        randRange(rng, -0.28, 0.28) * s.scale,
-        0.03,
-        randRange(rng, -0.22, 0.22) * s.scale,
+        randRange(rng, -0.16, 0.16) * s.scale,
+        0.04,
+        randRange(rng, -0.12, 0.12) * s.scale,
       );
       bump.rotation.y = rng() * Math.PI;
       bump.receiveShadow = true;
