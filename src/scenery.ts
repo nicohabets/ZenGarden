@@ -201,10 +201,15 @@ export function createMoss(states: MossState[]): THREE.Group {
     emissiveIntensity: 0.32,
     vertexColors: true,
   });
-  // Unlit dark moss — a lit cap read as the white/tan shoreline.
-  const mossFootMat = new THREE.MeshBasicMaterial({
-    color: 0x355028,
+  // Same green as the mound. A dark unlit disk read as a black void;
+  // a pale lit cap read as the white shoreline.
+  const mossFootMat = new THREE.MeshStandardMaterial({
+    color: 0x6a8a48,
     map: mossMap,
+    roughness: 0.94,
+    metalness: 0,
+    emissive: 0x2a3a18,
+    emissiveIntensity: 0.32,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);

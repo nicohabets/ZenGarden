@@ -138,16 +138,6 @@ export class GrainCloud {
       }
     });
 
-    // One extra crest grain, never stacked layers — those read as teeth on a slab.
-    sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, _tx, _tz, h) => {
-      if (n >= this.maxCount) return;
-      const seed = hash2((x * 73) | 0, (z * 91) | 0);
-      const bx = x + (seed - 0.5) * spacing * 0.2;
-      const bz = z + (hash2((z * 91) | 0, 5) - 0.5) * spacing * 0.2;
-      if (blocked(bx, bz, blockers)) return;
-      n = this.pushGrain(n, bx, bz, Math.max(h, sand.sampleHeight(bx, bz)), seed, 0);
-    });
-
     this.count = n;
     this.mesh.count = n;
     this.writeInstances(worldSize);
