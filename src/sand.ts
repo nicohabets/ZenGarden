@@ -112,7 +112,7 @@ export class SandField {
     applySandBedShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE);
 
     this.mesh = new THREE.Mesh(geo, mat);
-    this.mesh.position.y = GARDEN.sandY;
+    this.mesh.position.y = GARDEN.sandY - 0.006;
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = false;
     this.mesh.userData.kind = "sand";

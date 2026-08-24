@@ -56,7 +56,7 @@ export function chooseGrainQuality(software: boolean): {
   maxBed: number;
 } {
   if (wantHighQuality()) {
-    return { bedSpacing: 0.028, nearMinSpacing: 0.0046, maxNear: 34000, maxBed: 68000 };
+    return { bedSpacing: 0.024, nearMinSpacing: 0.006, maxNear: 38000, maxBed: 78000 };
   }
   if (software) {
     return { bedSpacing: 0.062, nearMinSpacing: 0.012, maxNear: 8000, maxBed: 18000 };

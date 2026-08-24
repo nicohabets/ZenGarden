@@ -115,7 +115,7 @@ export class GrainBed {
     this.placeNear();
   }
 
-  followLook(tx: number, tz: number, zoom: number): boolean {
+  followLook(tx: number, tz: number, zoom: number, elevation = 0.4, aspect = 1.6): boolean {
     const moved = Math.hypot(tx - this.lookX, tz - this.lookZ);
     const zoomed = Math.abs(zoom - this.lookZoom) / Math.max(0.2, this.lookZoom);
     const spacing = this.nearSpacing(zoom);
@@ -123,7 +123,7 @@ export class GrainBed {
     this.lookX = tx;
     this.lookZ = tz;
     this.lookZoom = zoom;
-    this.layoutNear(tx, tz, zoom);
+    this.layoutNear(tx, tz, zoom, elevation, aspect);
     this.placeNear();
     return true;
   }
@@ -139,10 +139,12 @@ export class GrainBed {
     return THREE.MathUtils.clamp(zoom * 0.01, this.nearMinSpacing, 0.016);
   }
 
-  private layoutNear(tx: number, tz: number, zoom: number): void {
-    const spacing = this.nearSpacing(zoom);
-    const halfH = THREE.MathUtils.clamp(zoom * 0.78, 0.42, 1.7);
-    const halfW = THREE.MathUtils.clamp(halfH * 1.55, 0.58, 2.6);
+  private layoutNear(tx: number, tz: number, zoom: number, elevation = 0.4, aspect = 1.6): void {
+    const stretch = 1 / Math.max(0.22, Math.sin(elevation));
+    const halfH = THREE.MathUtils.clamp(zoom * 0.7 * stretch, 0.85, 2.9);
+    const halfW = THREE.MathUtils.clamp(zoom * 0.62 * Math.max(1.15, aspect), 0.7, 2.5);
+    const area = halfW * 2 * halfH * 2;
+    const spacing = THREE.MathUtils.clamp(Math.sqrt(area / (this.maxNear * 0.78)), this.nearMinSpacing, 0.018);
     const cols = Math.max(8, Math.ceil((halfW * 2) / spacing));
     const rows = Math.max(8, Math.ceil((halfH * 2) / (spacing * 0.86)));
     let n = 0;
@@ -161,9 +163,9 @@ export class GrainBed {
       }
     }
     const layer0 = n;
-    const stackBudget = Math.min(max, n + ((n * 0.42) | 0));
+    const stackBudget = Math.min(max, n + ((n * 0.62) | 0));
     for (let k = 0; k < layer0 && n < stackBudget; k++) {
-      if (hash01((k * 13 + 8) | 0, 904) < 0.38) continue;
+      if (hash01((k * 13 + 8) | 0, 904) < 0.22) continue;
       this.nearX[n] = this.nearX[k] + (hash01(k, 221) - 0.5) * spacing * 0.45;
       this.nearZ[n] = this.nearZ[k] + (hash01(k, 337) - 0.5) * spacing * 0.45;
       this.nearRx[n] = this.nearRx[k] + 0.4;
@@ -235,17 +237,18 @@ export class GrainBed {
         continue;
       }
       if (posed.hide) {
-        dummy.position.set(posed.x, GARDEN.sandY + posed.h - 0.02, posed.z);
-        dummy.scale.set(sx[i] * 0.18, sy[i] * 0.12, sz[i] * 0.18);
-        dummy.rotation.set(rx[i], ry[i], rz[i]);
+        dummy.position.set(posed.x, -2, posed.z);
+        dummy.scale.set(0.001, 0.001, 0.001);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
         continue;
       }
-      const lift = sy[i] * 0.42 + (stack === 1 ? 0.006 + posed.h * 0.22 : 0) + (posed.h > 0.012 ? (posed.h - 0.012) * 0.28 : 0);
+      const pile = Math.max(0, posed.h);
+      const furrow = posed.h < -0.01 ? 0.48 : 1;
+      const lift = sy[i] * 0.48 * furrow + (stack === 1 ? 0.007 + pile * 0.35 : 0) + pile * 0.32;
       dummy.position.set(posed.x, GARDEN.sandY + posed.h + lift, posed.z);
       dummy.rotation.set(rx[i] + posed.tiltX, ry[i], rz[i] + posed.tiltZ);
-      dummy.scale.set(sx[i], sy[i], sz[i]);
+      dummy.scale.set(sx[i] * (1 + pile * 1.6) * furrow, sy[i] * (1 + pile * 2.4) * furrow, sz[i] * (1 + pile * 1.6) * furrow);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     }
@@ -291,13 +294,13 @@ function pushToBank(sample: HeightSample, x: number, z: number, e: number): {
   const gLen = Math.hypot(gx, gz);
   let px = x;
   let pz = z;
-  if (h < avg - 0.0035 && gLen > 1e-6) {
-    const push = Math.min(0.062, (avg - h) * 1.25);
+  if (h < avg - 0.0025 && gLen > 1e-6) {
+    const push = Math.min(0.078, (avg - h) * 1.55);
     px += (gx / gLen) * push;
     pz += (gz / gLen) * push;
   }
   const hh = sample(px, pz);
-  const hide = hh < -0.03 && h < avg - 0.01;
+  const hide = hh < -0.04 && h < avg - 0.014;
   return {
     x: px,
     z: pz,
@@ -369,10 +372,10 @@ function writePose(
   rx[i] = hash01(col, row + 21) * Math.PI;
   ry[i] = hash01(col + 9, row) * Math.PI * 2;
   rz[i] = hash01(col + 3, row + 7) * Math.PI;
-  const s = (0.0048 + hash01(col + 15, row + 4) * 0.0072) * size;
-  sx[i] = s * (0.7 + hash01(col, row + 33) * 0.85);
-  sy[i] = s * (0.55 + hash01(col + 18, row) * 0.7);
-  sz[i] = s * (0.65 + hash01(col + 4, row + 12) * 0.8);
+  const s = (0.0062 + hash01(col + 15, row + 4) * 0.0088) * size;
+  sx[i] = s * (0.78 + hash01(col, row + 33) * 0.55);
+  sy[i] = s * (0.62 + hash01(col + 18, row) * 0.5);
+  sz[i] = s * (0.74 + hash01(col + 4, row + 12) * 0.52);
 }
 
 function makeInstanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number): THREE.InstancedMesh {
@@ -388,14 +391,14 @@ function makeInstanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: nu
 }
 
 function createGrainGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.OctahedronGeometry(1, 0);
+  const geo = new THREE.IcosahedronGeometry(1, 0);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
     const h = hash01(((x + 2) * 17) | 0, ((z + 3) * 13 + i) | 0);
-    pos.setXYZ(i, x + (h - 0.5) * 0.34, y + (hash01(i, 8) - 0.5) * 0.28, z + (hash01(i, 19) - 0.5) * 0.32);
+    pos.setXYZ(i, x + (h - 0.5) * 0.22, y + (hash01(i, 8) - 0.5) * 0.18, z + (hash01(i, 19) - 0.5) * 0.2);
   }
   geo.computeVertexNormals();
   return geo;
@@ -429,12 +432,12 @@ function createGrainMaterial(): THREE.MeshStandardMaterial {
            float iid = float(gl_InstanceID);
            vec3 n = objectNormal;
            float k = grainHash(position * 4.2 + vec3(iid * 0.017, iid * 0.009, iid * 0.013));
-           transformed += n * (k - 0.5) * 0.36;
+           transformed += n * (k - 0.5) * 0.2;
          }
         `,
       );
   };
-  mat.customProgramCacheKey = () => "sand-grain-shard-v1";
+  mat.customProgramCacheKey = () => "sand-grain-shard-v2";
   return mat;
 }
 

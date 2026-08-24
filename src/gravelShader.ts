@@ -64,7 +64,7 @@ export function applySandBedShader(
            float nick = hash12(cell) - 0.5;
            float nick2 = hash12(cell + 17.3) - 0.5;
            float nick3 = hash12(cell * 1.7 + 4.2) - 0.5;
-           transformed.y += nick * 0.0055 + nick2 * 0.003 + nick3 * 0.0016;
+           transformed.y += nick * 0.0075 + nick2 * 0.0042 + nick3 * 0.0022;
            transformed.x += nick2 * 0.0018;
            transformed.z += nick * 0.0018;
          }
@@ -127,5 +127,5 @@ export function applySandBedShader(
         `,
       );
   };
-  mat.customProgramCacheKey = () => "sand-bed-grit-v1";
+  mat.customProgramCacheKey = () => "sand-bed-grit-v2";
 }
