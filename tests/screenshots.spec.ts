@@ -38,11 +38,11 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.92,
-        elevation: 0.4,
-        zoom: 0.58,
-        tx: -2.15,
-        tz: 1.72,
+        azimuth: 0.88,
+        elevation: 0.46,
+        zoom: 0.62,
+        tx: -3.15,
+        tz: 2.05,
       });
     });
     await page.waitForTimeout(400);
@@ -50,11 +50,11 @@ test.describe("screenshots", () => {
 
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.58,
-        elevation: 0.48,
-        zoom: 1.55,
-        tx: look.cx + 0.1,
-        tz: look.cz + 0.28,
+        azimuth: 0.52,
+        elevation: 0.55,
+        zoom: 1.85,
+        tx: look.cx + 0.05,
+        tz: look.cz + 0.22,
       });
     }, island);
     await page.waitForTimeout(280);
@@ -69,11 +69,11 @@ test.describe("screenshots", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.64,
-        elevation: 0.46,
-        zoom: 1.52,
-        tx: look.cx + 0.08,
-        tz: look.cz + 0.32,
+        azimuth: 0.56,
+        elevation: 0.52,
+        zoom: 1.72,
+        tx: look.cx + 0.04,
+        tz: look.cz + 0.2,
       });
     }, island);
     await page.waitForTimeout(900);

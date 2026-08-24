@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { chooseDisplayGrid, chooseSimGrid } from "./device";
+import { createGravelAtlas } from "./gravelAtlas";
 import { applyGravelShader } from "./gravelShader";
 import { mulberry32 } from "./rng";
 import { GARDEN, type Blocker, type SandTone } from "./types";
@@ -51,6 +52,8 @@ export class SandField {
   readonly dirZ: Float32Array;
 
   private readonly field: Uint8Array<ArrayBuffer>;
+  private readonly dispW: number;
+  private readonly dispH: number;
   private readonly scratch: Float32Array;
   private dirty: Rect | null = null;
   private slumpRect: Rect | null = null;
@@ -71,12 +74,15 @@ export class SandField {
     this.dirX = new Float32Array(n);
     this.dirZ = new Float32Array(n);
     this.scratch = new Float32Array(n);
-    this.field = new Uint8Array(new ArrayBuffer(n * 4));
+    const display = chooseDisplayGrid(sim);
+    this.dispW = display.w;
+    this.dispH = display.h;
+    this.field = new Uint8Array(new ArrayBuffer(display.w * display.h * 4));
     this.cellX = GARDEN.width / (sim.w - 1);
     this.cellZ = GARDEN.depth / (sim.h - 1);
     this.cellMin = Math.min(this.cellX, this.cellZ);
 
-    this.texture = new THREE.DataTexture(this.field, sim.w, sim.h, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.texture = new THREE.DataTexture(this.field, display.w, display.h, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.texture.colorSpace = THREE.NoColorSpace;
     this.texture.wrapS = THREE.ClampToEdgeWrapping;
     this.texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -86,18 +92,16 @@ export class SandField {
     this.texture.needsUpdate = true;
     this.texture.flipY = true;
 
-    const display = chooseDisplayGrid(sim);
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const white = new THREE.DataTexture(new Uint8Array([255, 252, 246, 255]), 1, 1);
-    white.needsUpdate = true;
-    white.colorSpace = THREE.SRGBColorSpace;
-
+    const atlas = createGravelAtlas();
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xf4efe6,
-      map: white,
-      roughness: 0.86,
+      color: 0xffffff,
+      map: atlas,
+      bumpMap: atlas,
+      bumpScale: 0.22,
+      roughness: 0.84,
       metalness: 0,
       displacementMap: this.texture,
       displacementScale: H_RANGE,
@@ -384,7 +388,10 @@ export class SandField {
   exportDataUrl(): string {
     this.packTexture();
     const raw = new Uint8Array(this.simW * this.simH);
-    for (let i = 0; i < raw.length; i++) raw[i] = this.field[i * 4];
+    for (let i = 0; i < raw.length; i++) {
+      const t = (this.height[i] - H_MIN) / H_RANGE;
+      raw[i] = t <= 0 ? 0 : t >= 1 ? 255 : (t * 255 + 0.5) | 0;
+    }
     const rle = rleEncode(raw);
     const useRle = rle.length < raw.length * 0.86;
     const bytes = useRle ? rle : raw;
@@ -615,31 +622,37 @@ export class SandField {
   }
 
   private packTexture(): void {
-    const { field, height, dirX, dirZ, scratch, simW, simH } = this;
+    const { field, dispW, dispH, simW, simH } = this;
     const lastI = simW - 1;
     const lastJ = simH - 1;
-    for (let j = 0; j < simH; j++) {
-      for (let i = 0; i < simW; i++) {
-        const idx = j * simW + i;
-        if (i === 0 || j === 0 || i === lastI || j === lastJ) {
-          scratch[idx] = height[idx];
-          continue;
-        }
-        scratch[idx] =
-          height[idx] * 0.46 +
-          (height[idx - 1] + height[idx + 1] + height[idx - simW] + height[idx + simW]) * 0.135;
+    for (let j = 0; j < dispH; j++) {
+      for (let i = 0; i < dispW; i++) {
+        const fi = (i / Math.max(1, dispW - 1)) * lastI;
+        const fj = (j / Math.max(1, dispH - 1)) * lastJ;
+        let h = this.sampleBilinear(fi, fj);
+        const ix = this.clampI(Math.floor(fi));
+        const jz = this.clampJ(Math.floor(fj));
+        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.0046 - 0.0023;
+        h += grain;
+        const dx = this.sampleDirX(ix, jz);
+        const dz = this.sampleDirZ(ix, jz);
+        const o = (j * dispW + i) * 4;
+        const t = (h - H_MIN) / H_RANGE;
+        field[o] = t <= 0 ? 0 : t >= 1 ? 255 : (t * 255 + 0.5) | 0;
+        field[o + 1] = ((dx * 0.5 + 0.5) * 255 + 0.5) | 0;
+        field[o + 2] = ((dz * 0.5 + 0.5) * 255 + 0.5) | 0;
+        field[o + 3] = 255;
       }
     }
-    const n = height.length;
-    for (let i = 0; i < n; i++) {
-      const o = i * 4;
-      const t = (scratch[i] - H_MIN) / H_RANGE;
-      field[o] = t <= 0 ? 0 : t >= 1 ? 255 : (t * 255 + 0.5) | 0;
-      field[o + 1] = ((dirX[i] * 0.5 + 0.5) * 255 + 0.5) | 0;
-      field[o + 2] = ((dirZ[i] * 0.5 + 0.5) * 255 + 0.5) | 0;
-      field[o + 3] = 255;
-    }
     this.texture.needsUpdate = true;
+  }
+
+  private sampleDirX(i: number, j: number): number {
+    return this.dirX[j * this.simW + i];
+  }
+
+  private sampleDirZ(i: number, j: number): number {
+    return this.dirZ[j * this.simW + i];
   }
 
   private sampleBilinear(fi: number, fj: number): number {
@@ -709,6 +722,12 @@ export class SandField {
     }
     return true;
   }
+}
+
+function hash2(x: number, y: number): number {
+  let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
 
 function singleTine(across: number): number {

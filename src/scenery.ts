@@ -87,9 +87,9 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
   const v = new THREE.Vector3();
-  const earth = new THREE.Color(0x6a5a40);
-  const moss = new THREE.Color(0x4f6a3c);
-  const mossLite = new THREE.Color(0x6f8a52);
+  const earth = new THREE.Color(0x8a744c);
+  const moss = new THREE.Color(0x6a8a48);
+  const mossLite = new THREE.Color(0x8aaa5c);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const n = v.clone().normalize();
@@ -142,22 +142,24 @@ export function createMoss(states: MossState[]): THREE.Group {
   const group = new THREE.Group();
   mossMap ??= mossTexture();
   const earth = new THREE.MeshStandardMaterial({
-    color: 0x6e5c42,
+    color: 0x8a7248,
     roughness: 0.96,
     metalness: 0,
   });
   const mossMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: mossMap,
-    roughness: 0.98,
+    roughness: 0.94,
     metalness: 0,
+    emissive: 0x1a2410,
+    emissiveIntensity: 0.18,
     vertexColors: true,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
     const rng = mulberry32(seed);
     const island = new THREE.Group();
-    island.position.set(s.x, GARDEN.sandY - 0.045, s.z);
+    island.position.set(s.x, GARDEN.sandY - 0.06, s.z);
     island.rotation.y = s.rotY;
     island.userData.kind = "moss";
 
