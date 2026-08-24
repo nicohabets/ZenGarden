@@ -96,8 +96,8 @@ export function applySandBedShader(
          float curve = 4.0 * h - hL - hR - hD - hU;
          float trough = clamp(-curve * 3.2, 0.0, 1.0);
          float crest = clamp(curve * 3.2, 0.0, 1.0);
-         vec4 g0 = gritCell(world, 240.0);
-         vec4 g1 = gritCell(world + vec2(0.31, 0.17), 118.0);
+         vec4 g0 = gritCell(world, 320.0);
+         vec4 g1 = gritCell(world + vec2(0.31, 0.17), 160.0);
          vec3 pale = vec3(0.93, 0.90, 0.85);
          vec3 mid = vec3(0.86, 0.83, 0.77);
          vec3 deep = vec3(0.62, 0.58, 0.53);
@@ -120,12 +120,12 @@ export function applySandBedShader(
            vec3 hz = vec3(0.0, (texture2D(uField, uvN + vec2(0.0, uTexel.y)).r - fld.r) * uHeightRange, uGarden.y * uTexel.y);
            vec3 slopeN = normalize(cross(hz, hx));
            vec4 cell = gritCell(worldN, 240.0);
-           vec3 gritN = normalize(vec3(cell.z, 0.85, cell.w));
-           normal = normalize(mix(normal, slopeN, 0.38));
-           normal = normalize(mix(normal, gritN, 0.46));
+           vec3 gritN = normalize(vec3((cell.x - 0.5) * 0.7, 1.15, (hash12(cell.xy + 3.1) - 0.5) * 0.7));
+           normal = normalize(mix(normal, slopeN, 0.28));
+           normal = normalize(mix(normal, gritN, 0.34));
          }
         `,
       );
   };
-  mat.customProgramCacheKey = () => "sand-bed-grit-v3";
+  mat.customProgramCacheKey = () => "sand-bed-grit-v4";
 }

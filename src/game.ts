@@ -170,7 +170,7 @@ export class ZenGarden {
     this.sand.flush();
     this.grains.setBlockers(this.blockers());
     this.grains.rebuild();
-    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect);
+    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect, this.cam.azimuth);
     this.settleOccupants();
     this.meter.plantMs = performance.now() - t0;
     this.ui.setSeed(seed);
@@ -197,7 +197,7 @@ export class ZenGarden {
     this.sand.flush();
     this.grains.setBlockers(this.blockers());
     this.grains.rebuild();
-    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect);
+    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect, this.cam.azimuth);
     this.settleOccupants();
     this.ui.setSeed(save.seed);
   }
@@ -624,7 +624,7 @@ export class ZenGarden {
     if (this.sand.consumeOccupantSettle()) this.settleOccupants();
     const packed = this.sand.flush();
     if (packed) this.grains.syncRegion(this.sand.dirtyWorld());
-    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect);
+    this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect, this.cam.azimuth);
     this.bonsai.update(performance.now(), this.clock.elapsedTime);
     if (this.basinGroup) updateWater(this.basinGroup, this.waterTime);
     if (this.lanternGroup) updateLanterns(this.lanternGroup, this.waterTime);
@@ -699,12 +699,12 @@ export class ZenGarden {
           tx: state.tx ?? cur.tx,
           tz: state.tz ?? cur.tz,
         });
-        this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect);
+        this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect, this.cam.azimuth);
         this.scheduleSave(true);
       },
       dolly: (delta) => {
         this.cam.dolly(delta);
-        this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect);
+        this.grains.followLook(this.cam.target.x, this.cam.target.z, this.cam.zoom, this.cam.elevation, this.cam.aspect, this.cam.azimuth);
         this.scheduleSave();
       },
     };

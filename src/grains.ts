@@ -115,7 +115,7 @@ export class GrainBed {
     this.placeNear();
   }
 
-  followLook(tx: number, tz: number, zoom: number, elevation = 0.4, aspect = 1.6): boolean {
+  followLook(tx: number, tz: number, zoom: number, elevation = 0.4, aspect = 1.6, azimuth = 0.7): boolean {
     const moved = Math.hypot(tx - this.lookX, tz - this.lookZ);
     const zoomed = Math.abs(zoom - this.lookZoom) / Math.max(0.2, this.lookZoom);
     const spacing = this.nearSpacing(zoom);
@@ -123,7 +123,7 @@ export class GrainBed {
     this.lookX = tx;
     this.lookZ = tz;
     this.lookZoom = zoom;
-    this.layoutNear(tx, tz, zoom, elevation, aspect);
+    this.layoutNear(tx, tz, zoom, elevation, aspect, azimuth);
     this.placeNear();
     return true;
   }
@@ -139,28 +139,32 @@ export class GrainBed {
     return THREE.MathUtils.clamp(zoom * 0.01, this.nearMinSpacing, 0.016);
   }
 
-  private layoutNear(tx: number, tz: number, zoom: number, elevation = 0.4, aspect = 1.6): void {
+  private layoutNear(tx: number, tz: number, zoom: number, elevation = 0.4, aspect = 1.6, azimuth = 0.7): void {
     const stretch = 1 / Math.max(0.22, Math.sin(elevation));
-    const viewH = zoom * 0.72 * stretch;
-    const viewW = zoom * 0.68 * Math.max(1.15, aspect);
-    const reach = THREE.MathUtils.clamp(Math.max(viewH, viewW) * 1.22, 0.95, 3.15);
-    const halfH = reach;
-    const halfW = reach;
-    const area = halfW * 2 * halfH * 2;
-    const spacing = THREE.MathUtils.clamp(Math.sqrt(area / (this.maxNear * 0.86)), this.nearMinSpacing, 0.028);
-    const cols = Math.max(8, Math.ceil((halfW * 2) / spacing));
-    const rows = Math.max(8, Math.ceil((halfH * 2) / (spacing * 0.86)));
+    const halfAlong = THREE.MathUtils.clamp(zoom * 0.62 * stretch * 1.12, 0.55, 2.4);
+    const halfAcross = THREE.MathUtils.clamp(zoom * 0.58 * Math.max(1.1, aspect) * 1.12, 0.42, 1.8);
+    const area = halfAlong * 2 * halfAcross * 2;
+    const spacing = THREE.MathUtils.clamp(Math.sqrt(area / (this.maxNear * 0.8)), this.nearMinSpacing, 0.02);
+    const rightX = Math.cos(azimuth);
+    const rightZ = -Math.sin(azimuth);
+    const fwdX = -Math.sin(azimuth);
+    const fwdZ = -Math.cos(azimuth);
+    const cols = Math.max(8, Math.ceil((halfAcross * 2) / spacing));
+    const rows = Math.max(8, Math.ceil((halfAlong * 2) / (spacing * 0.86)));
     let n = 0;
     const max = this.maxNear;
-    for (let j = 0; j < rows && n < max; j++) {
+    const layer0Budget = Math.floor(max * 0.74);
+    for (let j = 0; j < rows && n < layer0Budget; j++) {
       const hex = (j & 1) * 0.5;
-      for (let i = 0; i < cols && n < max; i++) {
+      for (let i = 0; i < cols && n < layer0Budget; i++) {
         const jx = hash01(i * 19 + 3, j * 29 + 11) - 0.5;
         const jz = hash01(i * 41 + 7, j * 17 + 5) - 0.5;
-        const x = tx + (i + hex - cols * 0.5 + jx * 0.94) * spacing;
-        const z = tz + (j - rows * 0.5 + jz * 0.94) * spacing * 0.86;
+        const u = (i + hex - cols * 0.5 + jx * 0.9) * spacing;
+        const v = (j - rows * 0.5 + jz * 0.9) * spacing * 0.86;
+        const x = tx + u * rightX + v * fwdX;
+        const z = tz + u * rightZ + v * fwdZ;
         if (Math.abs(x) > GARDEN.width * 0.5 - 0.04 || Math.abs(z) > GARDEN.depth * 0.5 - 0.04) continue;
-        const fat = hash01(i + 3, j + 9) > 0.91 ? 1.55 : 0.7;
+        const fat = hash01(i + 3, j + 9) > 0.93 ? 1.25 : 0.58;
         writePose(this.nearX, this.nearZ, this.nearRx, this.nearRy, this.nearRz, this.nearSx, this.nearSy, this.nearSz, n, x, z, i, j, fat);
         this.nearLayer[n] = 0;
         n += 1;
@@ -379,10 +383,10 @@ function writePose(
   rx[i] = hash01(col, row + 21) * Math.PI;
   ry[i] = hash01(col + 9, row) * Math.PI * 2;
   rz[i] = hash01(col + 3, row + 7) * Math.PI;
-  const s = (0.0054 + hash01(col + 15, row + 4) * 0.0115) * size;
-  sx[i] = s * (0.55 + hash01(col, row + 33) * 1.05);
-  sy[i] = s * (0.42 + hash01(col + 18, row) * 0.95);
-  sz[i] = s * (0.52 + hash01(col + 4, row + 12) * 1.0);
+  const s = (0.0036 + hash01(col + 15, row + 4) * 0.0058) * size;
+  sx[i] = s * (0.7 + hash01(col, row + 33) * 0.7);
+  sy[i] = s * (0.52 + hash01(col + 18, row) * 0.62);
+  sz[i] = s * (0.66 + hash01(col + 4, row + 12) * 0.68);
 }
 
 function makeInstanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number): THREE.InstancedMesh {
@@ -419,7 +423,7 @@ function createGrainMaterial(): THREE.MeshStandardMaterial {
     emissive: 0x3d382e,
     emissiveIntensity: 0.2,
     vertexColors: false,
-    flatShading: true,
+    flatShading: false,
     envMapIntensity: 0,
   });
   mat.onBeforeCompile = (shader) => {
