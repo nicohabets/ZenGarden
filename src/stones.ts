@@ -114,7 +114,7 @@ function deform(geo: THREE.BufferGeometry, variant: number, flattenY: number, ch
     v.x *= stretchX;
     v.z *= stretchZ;
     v.y *= flattenY;
-    if (v.y < -0.4) v.y = -0.4;
+    if (v.y < -0.28) v.y = -0.28;
     pos.setXYZ(i, v.x, v.y, v.z);
 
     const c = base.clone();
@@ -184,8 +184,8 @@ function addLichen(mesh: THREE.Mesh, state: StoneState): void {
   base.userData.mossBase = true;
   mesh.add(base);
 
-  if (state.variant % 3 === 1) return;
-  const count = 1 + (state.variant % 2);
+  if (state.variant % 2 === 1) return;
+  const count = 1;
   for (let i = 0; i < count; i++) {
     const patch = new THREE.Mesh(geo, rng() > 0.4 ? moss : lichen);
     patch.position.set(rng() * 0.26 - 0.13, 0.16 + rng() * 0.1, rng() * 0.2 - 0.08);
@@ -211,8 +211,8 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
     bumpScale: litho === "granite" ? 0.1 : 0.12,
     roughness: litho === "granite" ? 0.78 : 0.86,
     metalness: litho === "granite" ? 0.06 : 0.03,
-    emissive: litho === "granite" ? 0x3a3630 : 0x2a2824,
-    emissiveIntensity: 0.28,
+    emissive: litho === "granite" ? 0x5a544c : 0x3e3a36,
+    emissiveIntensity: 0.42,
     vertexColors: true,
     flatShading: false,
   });

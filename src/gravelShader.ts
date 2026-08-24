@@ -61,14 +61,14 @@ export function applyGravelShader(
          float hD = texture2D(uField, uv + vec2(0.0, -uTexel.y)).r;
          float hU = texture2D(uField, uv + vec2(0.0, uTexel.y)).r;
          float curve = 4.0 * h - hL - hR - hD - hU;
-         float trough = clamp(-curve * 2.8, 0.0, 1.0);
-         float crest = clamp(curve * 2.8, 0.0, 1.0);
+         float trough = clamp(-curve * 3.4, 0.0, 1.0);
+         float crest = clamp(curve * 3.4, 0.0, 1.0);
+         float slope = (hR - hL) * 3.6 + (hU - hD) * 1.6;
          vec3 col = diffuseColor.rgb;
-         col *= mix(1.0, 0.72, trough);
-         col *= mix(1.0, 1.08, crest);
-         col += vec3(0.04, 0.035, 0.022) * crest;
-         float grit = hash12(floor((uv - 0.5) * uGarden * 110.0));
-         col *= 0.93 + grit * 0.09;
+         col *= 0.78 + clamp(0.5 + slope, 0.0, 1.0) * 0.44;
+         col *= mix(1.0, 0.62, trough);
+         col *= mix(1.0, 1.12, crest);
+         col += vec3(0.05, 0.042, 0.028) * crest;
          diffuseColor.rgb = col;
         `,
       )
