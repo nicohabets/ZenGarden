@@ -121,7 +121,8 @@ export function createFrame(): THREE.Group {
 function islandGeometry(seed: number): THREE.BufferGeometry {
   // Closed ellipsoid. Yanking a sphere skirt open showed a bright
   // interior and grit underneath; that is the HUD clip.
-  const geo = new THREE.IcosahedronGeometry(1, 3);
+  const geo = new THREE.SphereGeometry(1, 36, 22);
+  geo.rotateX(0.9);
   const rng = mulberry32(seed);
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
