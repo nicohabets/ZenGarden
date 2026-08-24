@@ -1,7 +1,7 @@
 import { test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
-const outDir = "docs/screenshots";
+const outDir = process.env.SHOT_DIR || "docs/screenshots";
 /** Known layout: Ryoan-ji 15-stone groups on a pale gravel court. */
 const SHOT_SEED = 3596739839;
 

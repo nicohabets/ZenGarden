@@ -475,7 +475,7 @@ export class ZenGarden {
   private occupants(): { x: number; z: number; r: number; pile?: number; sink?: number }[] {
     const list = [
       ...this.stones.stones.map((s) => ({ x: s.x, z: s.z, r: 0.28 + s.scale * 0.2 })),
-      ...this.mossStates.map((m) => ({ x: m.x, z: m.z, r: m.scale * 0.52, pile: 0.02, sink: 0.018 })),
+      ...this.mossStates.map((m) => ({ x: m.x, z: m.z, r: m.scale * 0.28, pile: 0.012, sink: 0.01 })),
       { x: this.basinState.x, z: this.basinState.z, r: 0.52 },
       { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.6 },
       ...this.lanternStates.map((l) => ({ x: l.x, z: l.z, r: 0.22 })),
@@ -503,6 +503,7 @@ export class ZenGarden {
     }
   }
 
+  /** Rake keep-out. Moss stays here so tines do not carve the island. */
   private blockers(): Blocker[] {
     const list: Blocker[] = [
       { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.68 },
@@ -510,16 +511,22 @@ export class ZenGarden {
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });
     for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.32 + s.scale * 0.18 });
-    for (const m of this.mossStates) {
-      list.push({
-        x: m.x,
-        z: m.z,
-        r: m.scale * 0.72,
-        rx: m.scale * 0.7,
-        rz: m.scale * 0.56,
-        rotY: m.rotY,
-      });
-    }
+    for (const m of this.mossStates) list.push({ x: m.x, z: m.z, r: m.scale * 0.72 });
+    return list;
+  }
+
+  /**
+   * Grain keep-out. Moss is omitted on purpose: a keep-out ellipse punched
+   * the tan halo / inverted ring (pebble rim around a sand hole). Grit packs
+   * under the moss mound so the court stays opaque to the island edge.
+   */
+  private grainBlockers(): Blocker[] {
+    const list: Blocker[] = [
+      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.58 },
+      { x: this.basinState.x, z: this.basinState.z, r: 0.48 },
+    ];
+    for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.28 });
+    for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.22 + s.scale * 0.14 });
     return list;
   }
 
@@ -712,7 +719,7 @@ export class ZenGarden {
   }
 
   private syncGrains(force = false): void {
-    this.grains.sync(this.cam, this.sand, this.blockers(), this.renderer.domElement.height, force);
+    this.grains.sync(this.cam, this.sand, this.grainBlockers(), this.renderer.domElement.height, force);
   }
 
   private playRakeStroke(points: Array<[number, number]>): RakeMode {

@@ -14,9 +14,8 @@ export function grainBudget(): number {
 const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
 
-/** Bank growth in metres so piles stay readable at every zoom. */
-const LAYER_H = 0.0028;
-const SLUMP = 0.0065;
+/** Bank growth in metres so a leftover pile still sits on the bed. */
+const LAYER_H = 0.0022;
 
 /**
  * Small rounded grit on the grit-colored bed. Troughs stay a thinner
@@ -73,6 +72,8 @@ export class GrainCloud {
   private layout(cam: CameraRig, sand: SandField, blockers: Blocker[], viewH: number): void {
     const court = courtBounds();
     const close = cam.zoom < 1.2;
+    // Close-up uses the real ground footprint. A short frustum left a tan
+    // slab past the last grain row (the "teeth on the bank edge").
     const bounds = close ? slantBounds(cam) : court;
     const x0 = Math.max(court.x0, bounds.x0);
     const x1 = Math.min(court.x1, bounds.x1);
@@ -82,14 +83,15 @@ export class GrainCloud {
     const spanZ = Math.max(0.1, z1 - z0);
     const hq = wantHighQuality();
     const carpetCap = Math.floor(this.maxCount * 0.9);
-    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.7)));
+    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.82)));
     const px = Math.max(1, viewH);
-    const targetPx = close ? 8 : cam.zoom < 2.2 ? 11 : 13;
+    const targetPx = close ? 7 : cam.zoom < 2.2 ? 10 : 12;
     const screenWorld = (targetPx * cam.zoom) / px;
-    const worldSize = Math.max(spacing * 1.58, screenWorld);
+    // Overlap so the bed is opaque packed grit, not a tan plane in the gaps.
+    const worldSize = Math.max(spacing * 1.78, screenWorld);
 
     let n = 0;
-    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.7), 0, 0.16);
+    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2);
     n = this.plantCarpet(
       n,
       x0 + spacing * 0.5,
@@ -101,45 +103,48 @@ export class GrainCloud {
       blockers,
       carpetCap,
       0,
-      0.14,
+      0.16,
+    );
+    // Third offset carpet so troughs stay a packed bed, not a skip that shows the plane.
+    n = this.plantCarpet(
+      n,
+      x0 + spacing * 0.25,
+      z0 + spacing * 0.58,
+      x1,
+      z1,
+      spacing * 0.92,
+      sand,
+      blockers,
+      Math.floor(this.maxCount * 0.95),
+      0,
+      0.18,
     );
 
-    const pathStep = hq ? Math.max(spacing * 0.5, 0.0028) : Math.max(spacing, 0.018);
-    const troughCap = Math.floor(this.maxCount * 0.93);
-    const troughHalf = Math.max(0.034, spacing * 6);
-    const troughStep = Math.max(spacing * 0.55, hq ? 0.0024 : spacing * 0.7);
+    const pathStep = hq ? Math.max(spacing * 0.45, 0.0024) : Math.max(spacing * 0.85, 0.014);
+    const troughCap = Math.floor(this.maxCount * 0.985);
+    const troughHalf = Math.max(0.03, spacing * 5);
+    const troughStep = Math.max(spacing * 0.5, hq ? 0.0022 : spacing * 0.62);
     sand.forEachTrough(x0, z0, x1, z1, pathStep, (x, z, tx, tz) => {
       if (n >= troughCap) return;
       const across = Math.hypot(tx, tz) || 1;
       const nx = -tz / across;
       const nz = tx / across;
       for (let k = -troughHalf; k <= troughHalf && n < troughCap; k += troughStep) {
-        const gx = x + nx * k + (hash2((x * 67 + k * 40) | 0, 3) - 0.5) * spacing * 0.22;
-        const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.22;
+        const gx = x + nx * k + (hash2((x * 67 + k * 40) | 0, 3) - 0.5) * spacing * 0.2;
+        const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.2;
         if (blocked(gx, gz, blockers)) continue;
         n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 90) | 0, (gz * 90) | 0), 0);
       }
     });
 
-    const bankLayers = hq ? 2 : 1;
-    sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, tx, tz, h) => {
+    // One extra crest grain, never stacked layers — those read as teeth on a slab.
+    sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, _tx, _tz, h) => {
       if (n >= this.maxCount) return;
-      const across = Math.hypot(tx, tz) || 1;
-      const nx = -tz / across;
-      const nz = tx / across;
       const seed = hash2((x * 73) | 0, (z * 91) | 0);
-      const bx = x + (seed - 0.5) * spacing * 0.22;
-      const bz = z + (hash2((z * 91) | 0, 5) - 0.5) * spacing * 0.22;
-      if (!blocked(bx, bz, blockers)) {
-        n = this.pushGrain(n, bx, bz, Math.max(h, sand.sampleHeight(bx, bz)), seed, 0);
-      }
-      for (let layer = 1; layer <= bankLayers && n < this.maxCount; layer++) {
-        const s = hash2(((x * 41) | 0) + layer, ((z * 37) | 0) + 11);
-        const ox = x + nx * layer * SLUMP * 0.35 + (s - 0.5) * spacing * 0.2;
-        const oz = z + nz * layer * SLUMP * 0.35 + (hash2(layer + 3, 19) - 0.5) * spacing * 0.2;
-        if (blocked(ox, oz, blockers)) continue;
-        n = this.pushGrain(n, ox, oz, h, s, layer);
-      }
+      const bx = x + (seed - 0.5) * spacing * 0.2;
+      const bz = z + (hash2((z * 91) | 0, 5) - 0.5) * spacing * 0.2;
+      if (blocked(bx, bz, blockers)) return;
+      n = this.pushGrain(n, bx, bz, Math.max(h, sand.sampleHeight(bx, bz)), seed, 0);
     });
 
     this.count = n;
@@ -247,30 +252,52 @@ function courtBounds(): { x0: number; z0: number; x1: number; z1: number } {
 }
 
 function slantBounds(cam: CameraRig): { x0: number; z0: number; x1: number; z1: number } {
-  const sinE = Math.max(0.2, Math.sin(cam.elevation));
-  const halfAlong = (cam.zoom * 0.62) / sinE;
-  const halfAcross = cam.zoom * cam.aspect * 0.62;
-  const sin = Math.sin(cam.azimuth);
-  const cos = Math.cos(cam.azimuth);
-  const corners = [
-    [-halfAcross, -halfAlong],
-    [halfAcross, -halfAlong],
-    [-halfAcross, halfAlong],
-    [halfAcross, halfAlong],
-  ] as const;
+  // Intersect the ortho frustum with the court so grazing close-ups stay packed.
+  cam.camera.updateMatrixWorld();
+  const samples: Array<[number, number]> = [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ];
+  const near = new THREE.Vector3();
+  const far = new THREE.Vector3();
   let x0 = Infinity;
   let z0 = Infinity;
   let x1 = -Infinity;
   let z1 = -Infinity;
-  for (const [across, along] of corners) {
-    const x = cam.target.x + across * cos + along * sin;
-    const z = cam.target.z - across * sin + along * cos;
+  let hits = 0;
+  for (const [nx, ny] of samples) {
+    near.set(nx, ny, -1).unproject(cam.camera);
+    far.set(nx, ny, 1).unproject(cam.camera);
+    const dy = far.y - near.y;
+    if (Math.abs(dy) < 1e-6) continue;
+    const t = (GARDEN.sandY - near.y) / dy;
+    if (t < -0.05 || t > 1.05) continue;
+    const x = near.x + (far.x - near.x) * t;
+    const z = near.z + (far.z - near.z) * t;
     x0 = Math.min(x0, x);
     z0 = Math.min(z0, z);
     x1 = Math.max(x1, x);
     z1 = Math.max(z1, z);
+    hits += 1;
   }
-  const pad = Math.max(0.12, cam.zoom * 0.1);
+  if (hits < 2) {
+    const sinE = Math.max(0.12, Math.sin(cam.elevation));
+    const halfAlong = cam.zoom / sinE;
+    const halfAcross = cam.zoom * cam.aspect;
+    return {
+      x0: cam.target.x - halfAcross,
+      z0: cam.target.z - halfAlong,
+      x1: cam.target.x + halfAcross,
+      z1: cam.target.z + halfAlong,
+    };
+  }
+  const pad = Math.max(0.22, cam.zoom * 0.45);
   return { x0: x0 - pad, z0: z0 - pad, x1: x1 + pad, z1: z1 + pad };
 }
 
