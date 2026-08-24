@@ -143,7 +143,7 @@ export class GrainCloud {
       const seed = this.seeds[i];
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
       const layer = this.layers[i];
-      const y = GARDEN.sandY + h * 0.92 + 0.0012 + layer * (0.0028 + Math.max(0, h) * 0.08) + (seed - 0.5) * 0.0008;
+      const y = GARDEN.sandY + h * 1.85 + 0.0012 + layer * (0.003 + Math.max(0, h) * 0.1) + (seed - 0.5) * 0.0008;
       const s = worldSize * (0.7 + seed * 0.28);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 4.2, seed * 6.1, hash2(i + 3, 17) * 5.4);

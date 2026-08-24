@@ -219,16 +219,16 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a8478, 0.92);
+    const hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a8478, 0.62);
     this.scene.add(hemi);
-    const fill = new THREE.AmbientLight(0xf2ebe0, 0.34);
+    const fill = new THREE.AmbientLight(0xf2ebe0, 0.12);
     this.scene.add(fill);
-    const bounce = new THREE.DirectionalLight(0xe8e4dc, 0.48);
+    const bounce = new THREE.DirectionalLight(0xe8e4dc, 0.28);
     bounce.position.set(-9.2, 6.4, -5.4);
     bounce.castShadow = false;
     this.scene.add(bounce);
-    const sun = new THREE.DirectionalLight(0xfff3e2, 1.18);
-    sun.position.set(16.8, 4.4, 7.2);
+    const sun = new THREE.DirectionalLight(0xfff3e2, 1.42);
+    sun.position.set(14.2, 3.2, 8.4);
     sun.castShadow = this.useShadows;
     if (this.useShadows) {
       sun.shadow.mapSize.set(1024, 1024);

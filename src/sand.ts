@@ -19,8 +19,8 @@ const RIDGE_SIGMA = 0.03;
 const RAKE_DEPTH = 0.05;
 
 /** Displacement so the packed floor carries rake relief at court scale. */
-export const SAND_DISP_SCALE = H_RANGE * 0.92;
-export const SAND_DISP_BIAS = H_MIN * 0.92;
+export const SAND_DISP_SCALE = H_RANGE * 1.85;
+export const SAND_DISP_BIAS = H_MIN * 1.85;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
