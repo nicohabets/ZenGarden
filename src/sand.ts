@@ -10,13 +10,13 @@ export const HEIGHT_RLE_PREFIX = "hf1r:";
 const H_MIN = -0.086;
 const H_MAX = 0.086;
 const H_RANGE = H_MAX - H_MIN;
-const REPOSE = Math.tan((33 * Math.PI) / 180);
+const REPOSE = Math.tan((36 * Math.PI) / 180);
 const TINES = 5;
-const TINE_GAP = 0.102;
-const TROUGH_SIGMA = 0.03;
-const RIDGE_OFF = 0.05;
-const RIDGE_SIGMA = 0.024;
-const RAKE_DEPTH = 0.03;
+const TINE_GAP = 0.11;
+const TROUGH_SIGMA = 0.028;
+const RIDGE_OFF = 0.052;
+const RIDGE_SIGMA = 0.022;
+const RAKE_DEPTH = 0.046;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
@@ -192,27 +192,46 @@ export class SandField {
   rakeArc(cx: number, cz: number, radius: number, a0: number, a1: number, blockers: Blocker[]): void {
     const sweep = a1 - a0;
     if (Math.abs(sweep) < 0.008 || radius < 0.12) return;
-    this.carveArc(cx, cz, radius, a0, a1, blockers, RAKE_DEPTH);
+    this.carveArc(cx, cz, radius, a0, a1, blockers, RAKE_DEPTH, false);
     this.slumpLeft = Math.max(this.slumpLeft, 10);
   }
 
   paintRing(wx: number, wz: number, radiusWorld: number, innerWorld = 0.42, tineGap = 0.165): void {
     for (let r = innerWorld + tineGap; r < radiusWorld; r += tineGap) {
-      this.carveArc(wx, wz, r, 0, Math.PI * 2, [], RAKE_DEPTH * 0.92);
+      this.carveArc(wx, wz, r, 0, Math.PI * 2, [], RAKE_DEPTH * 0.92, true);
     }
-    this.slumpLeft = Math.max(this.slumpLeft, 18);
+    this.slumpLeft = Math.max(this.slumpLeft, 8);
   }
 
   paintParallel(seed: number): void {
     const rng = mulberry32(seed ^ 0x51ed);
     const gap = 0.17 + rng() * 0.03;
     const inset = 0.28;
+    const z0 = -GARDEN.depth / 2 + inset;
+    const z1 = GARDEN.depth / 2 - inset;
     const x0 = -GARDEN.width / 2 + inset;
     const x1 = GARDEN.width / 2 - inset;
-    for (let z = -GARDEN.depth / 2 + inset; z < GARDEN.depth / 2 - inset; z += gap) {
-      this.carveSegment(x0, z, x1, z, [], RAKE_DEPTH * 0.78, false);
+    const i0 = this.clampI(this.worldToI(x0));
+    const i1 = this.clampI(this.worldToI(x1));
+    const j0 = this.clampJ(this.worldToJ(z0 - 0.22));
+    const j1 = this.clampJ(this.worldToJ(z1 + 0.22));
+    const depth = RAKE_DEPTH * 0.78;
+    const grooves: number[] = [];
+    for (let z = z0; z <= z1; z += gap) grooves.push(z);
+    for (let j = j0; j <= j1; j++) {
+      const z = this.jToWorld(j);
+      let delta = 0;
+      for (const gz of grooves) delta += singleTine(z - gz) * depth;
+      if (Math.abs(delta) < 1e-5) continue;
+      for (let i = i0; i <= i1; i++) {
+        const idx = j * this.simW + i;
+        this.height[idx] += delta;
+        this.dirX[idx] = 1;
+        this.dirZ[idx] = 0;
+      }
     }
-    this.slumpLeft = Math.max(this.slumpLeft, 22);
+    this.expandDirty(i0, j0, i1, j1);
+    this.slumpLeft = Math.max(this.slumpLeft, 10);
   }
 
   embedOccupants(items: Occupant[]): void {
@@ -266,8 +285,8 @@ export class SandField {
     this.expandDirty(i0, j0, i1, j1);
   }
 
-  settle(steps = 24): void {
-    this.slumpRegion(this.fullRect(), steps);
+  settle(steps = 12): void {
+    this.slumpRegion(this.dirty ?? this.fullRect(), steps);
     this.clampHeights();
     this.packTexture();
     this.occupantsDirty = true;
@@ -496,6 +515,7 @@ export class SandField {
     a1: number,
     blockers: Blocker[],
     depth: number,
+    single = false,
   ): void {
     let sweep = a1 - a0;
     while (sweep > Math.PI * 2) sweep -= Math.PI * 2;
@@ -520,7 +540,7 @@ export class SandField {
         if (Math.abs(across) > pad) continue;
         let ang = Math.atan2(dz, dx);
         if (!angleInSweep(ang, a0, sweep)) continue;
-        const delta = tineProfile(across) * depth;
+        const delta = (single ? singleTine(across) : tineProfile(across)) * depth;
         if (Math.abs(delta) < 1e-5) continue;
         const idx = j * this.simW + i;
         this.height[idx] += delta;
@@ -563,7 +583,7 @@ export class SandField {
             }
           }
           if (steep > maxDh) {
-            const move = (steep - maxDh) * 0.42;
+            const move = (steep - maxDh) * 0.28;
             h[idx] -= move;
             h[dest] += move;
           }
@@ -657,6 +677,14 @@ export class SandField {
     }
     return true;
   }
+}
+
+function singleTine(across: number): number {
+  const trough = Math.exp(-0.5 * (across / TROUGH_SIGMA) ** 2);
+  const ridge =
+    Math.exp(-0.5 * ((across - RIDGE_OFF) / RIDGE_SIGMA) ** 2) +
+    Math.exp(-0.5 * ((across + RIDGE_OFF) / RIDGE_SIGMA) ** 2);
+  return -trough + (TROUGH_SIGMA / (2 * RIDGE_SIGMA)) * ridge;
 }
 
 function tineProfile(across: number): number {

@@ -89,7 +89,7 @@ export class ZenGarden {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.14;
+    this.renderer.toneMappingExposure = 1.22;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene.background = new THREE.Color(0xcfc9be);
@@ -122,7 +122,6 @@ export class ZenGarden {
     this.ui.setSeed(this.seed);
     this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
     this.resize();
-    this.renderer.render(this.scene, this.cam.camera);
     this.ui.setReady(true, true);
     this.exposeApi();
     this.tick();
@@ -147,7 +146,7 @@ export class ZenGarden {
       this.sand.paintRing(island.x, island.z, island.innerR + 1.15, island.innerR, 0.165);
     }
     this.sand.embedOccupants(this.occupants());
-    this.sand.settle(32);
+    this.sand.settle(10);
     this.sand.flush();
     this.settleOccupants();
     this.ui.setSeed(seed);
@@ -171,7 +170,6 @@ export class ZenGarden {
       this.sand.paintParallel(save.seed);
     }
     this.cam.applyState(save.camera);
-    this.sand.settle(8);
     this.sand.flush();
     this.settleOccupants();
     this.ui.setSeed(save.seed);
@@ -198,10 +196,10 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf4f0e6, 0x5a564c, 0.36);
+    const hemi = new THREE.HemisphereLight(0xf6f2ea, 0x6a6458, 0.55);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1dc, 1.72);
-    sun.position.set(18.5, 2.35, 7.4);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 1.55);
+    sun.position.set(16.8, 3.7, 7.2);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;
@@ -213,13 +211,13 @@ export class ZenGarden {
     sun.shadow.bias = -0.00045;
     sun.shadow.normalBias = 0.025;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xc5ccd2, 0.2);
-    fill.position.set(-9, 4.4, -5);
+    const fill = new THREE.DirectionalLight(0xd0d6dc, 0.32);
+    fill.position.set(-9, 5.4, -5);
     this.scene.add(fill);
-    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.1);
-    rim.position.set(2, 2.8, -9);
+    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.16);
+    rim.position.set(2, 3.2, -9);
     this.scene.add(rim);
-    this.scene.add(new THREE.AmbientLight(0xe6e0d4, 0.14));
+    this.scene.add(new THREE.AmbientLight(0xe8e2d6, 0.22));
   }
 
   private bindUi(): void {
@@ -396,7 +394,7 @@ export class ZenGarden {
   private onUp(e: PointerEvent): void {
     this.pointers.delete(e.pointerId);
     if (this.mode === "rake") {
-      this.sand.settle(16);
+      this.sand.settle(8);
       this.sand.flush();
       this.settleOccupants();
       this.scheduleSave(true);
@@ -405,13 +403,13 @@ export class ZenGarden {
         const s = this.stones.get(this.dragId);
         if (s) this.sand.bankObject(s.x, s.z, 0.28 + s.scale * 0.2, 0.016, 0.018);
       }
-      this.sand.settle(8);
+      this.sand.settle(6);
       this.sand.flush();
       this.settleOccupants();
       this.scheduleSave(true);
     } else if (this.mode === "drag-bonsai") {
       this.sand.bankObject(this.bonsaiState.x, this.bonsaiState.z, 0.58, 0.014, 0.016);
-      this.sand.settle(6);
+      this.sand.settle(4);
       this.sand.flush();
       this.settleOccupants();
       this.scheduleSave(true);
@@ -451,7 +449,7 @@ export class ZenGarden {
     };
     this.stones.add(state);
     this.sand.bankObject(x, z, 0.28 + state.scale * 0.2, 0.016, 0.018);
-    this.sand.settle(8);
+    this.sand.settle(5);
     this.sand.flush();
     this.settleOccupants();
     this.scheduleSave(true);
@@ -677,7 +675,7 @@ export class ZenGarden {
     for (let i = 1; i < points.length; i++) {
       this.applyRake(guide.feed(points[i][0], points[i][1], islands));
     }
-    this.sand.settle(14);
+    this.sand.settle(6);
     this.sand.flush();
     this.settleOccupants();
     this.scheduleSave(true);

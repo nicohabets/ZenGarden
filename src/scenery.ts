@@ -68,7 +68,7 @@ export function createFrame(): THREE.Group {
 }
 
 function islandGeometry(seed: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 40, 28);
+  const geo = new THREE.SphereGeometry(1, 32, 22);
   const rng = mulberry32(seed);
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
@@ -148,7 +148,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     island.userData.kind = "moss";
 
     const soil = new THREE.Mesh(islandGeometry(seed ^ 0x51), earth);
-    soil.scale.set(s.scale * 0.62, s.scale * 0.16, s.scale * 0.54);
+    soil.scale.set(s.scale * 0.62, s.scale * 0.22, s.scale * 0.54);
     soil.position.y = -0.01;
     soil.receiveShadow = true;
     soil.castShadow = true;
@@ -156,7 +156,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     island.add(soil);
 
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
-    moss.scale.set(s.scale * 0.55, s.scale * 0.22, s.scale * 0.48);
+    moss.scale.set(s.scale * 0.55, s.scale * 0.32, s.scale * 0.48);
     moss.position.y = 0.01;
     moss.receiveShadow = true;
     moss.castShadow = true;

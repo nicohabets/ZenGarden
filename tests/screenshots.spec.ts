@@ -38,11 +38,11 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 1.12,
-        elevation: 0.21,
-        zoom: 0.44,
-        tx: -2.55,
-        tz: 2.08,
+        azimuth: 1.05,
+        elevation: 0.23,
+        zoom: 0.5,
+        tx: -2.35,
+        tz: 1.88,
       });
     });
     await page.waitForTimeout(400);

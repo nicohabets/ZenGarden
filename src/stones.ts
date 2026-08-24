@@ -134,11 +134,11 @@ export function createStoneGeometry(variant: number): THREE.BufferGeometry {
 
   const shape = shapeOf(variant);
   let geo: THREE.BufferGeometry;
-  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 10, 5, 8), variant, 0.94, 0.055);
+  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 8, 4, 6), variant, 0.94, 0.055);
   else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 2), variant, 1.42, 0.045);
-  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 28, 20), variant, 0.56, 0.035);
+  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 22, 16), variant, 0.56, 0.035);
   else if (shape === "angular") geo = deform(new THREE.DodecahedronGeometry(0.74, 2), variant, 0.8, 0.07);
-  else geo = deform(new THREE.IcosahedronGeometry(0.9, 3), variant, variant % 3 === 0 ? 0.62 : 0.78, 0.05);
+  else geo = deform(new THREE.IcosahedronGeometry(0.9, 2), variant, variant % 3 === 0 ? 0.62 : 0.78, 0.05);
 
   geo.userData.shared = true;
   geoCache.set(variant, geo);
