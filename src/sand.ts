@@ -19,8 +19,9 @@ const RIDGE_SIGMA = 0.03;
 const RAKE_DEPTH = 0.05;
 
 /** Displacement so leftover gaps under the grit still sit in the valley. */
-export const SAND_DISP_SCALE = H_RANGE * 2.15;
-export const SAND_DISP_BIAS = H_MIN * 2.15;
+export const SAND_HEIGHT_GAIN = 2.15;
+export const SAND_DISP_SCALE = H_RANGE * SAND_HEIGHT_GAIN;
+export const SAND_DISP_BIAS = H_MIN * SAND_HEIGHT_GAIN;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
@@ -98,7 +99,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([220, 212, 198, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([226, 218, 206, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({

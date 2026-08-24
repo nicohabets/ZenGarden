@@ -135,10 +135,10 @@ export function createStoneGeometry(variant: number): THREE.BufferGeometry {
   const shape = shapeOf(variant);
   let geo: THREE.BufferGeometry;
   if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 16, 8, 12), variant, 0.94, 0.016);
-  else if (shape === "standing") geo = deform(new THREE.SphereGeometry(0.64, 48, 36), variant, 1.28, 0.012);
-  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 48, 36), variant, 0.56, 0.01);
-  else if (shape === "angular") geo = deform(new THREE.SphereGeometry(0.74, 40, 32), variant, 0.82, 0.012);
-  else geo = deform(new THREE.SphereGeometry(0.86, 48, 36), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.01);
+  else if (shape === "standing") geo = deform(new THREE.SphereGeometry(0.64, 64, 48), variant, 1.28, 0.008);
+  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 64, 48), variant, 0.56, 0.007);
+  else if (shape === "angular") geo = deform(new THREE.SphereGeometry(0.74, 56, 42), variant, 0.82, 0.008);
+  else geo = deform(new THREE.SphereGeometry(0.86, 64, 48), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.007);
 
   geo.userData.shared = true;
   geoCache.set(variant, geo);
@@ -212,7 +212,7 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
     roughness: litho === "granite" ? 0.78 : 0.86,
     metalness: litho === "granite" ? 0.06 : 0.03,
     emissive: litho === "granite" ? 0x8a8278 : 0x5c5852,
-    emissiveIntensity: 0.62,
+    emissiveIntensity: 0.22,
     vertexColors: true,
     flatShading: false,
   });
