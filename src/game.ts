@@ -91,11 +91,11 @@ export class ZenGarden {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.02;
+    this.renderer.toneMappingExposure = 1.16;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.background = new THREE.Color(0xc8c4bc);
-    this.scene.fog = new THREE.Fog(0xc8c4bc, 22, 46);
+    this.scene.background = new THREE.Color(0xd6d2ca);
+    this.scene.fog = new THREE.Fog(0xd6d2ca, 26, 52);
 
     this.audio = new AmbientAudio(loadMuted());
     this.sand = new SandField();
@@ -204,9 +204,9 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xe8e6e0, 0x6a6860, 0.62);
+    const hemi = new THREE.HemisphereLight(0xf2f0ea, 0x7a766c, 0.78);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff2dc, 1.08);
+    const sun = new THREE.DirectionalLight(0xfff6ea, 1.22);
     sun.position.set(7.5, 14, 5.5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1536, 1536);
@@ -224,7 +224,7 @@ export class ZenGarden {
     const rim = new THREE.DirectionalLight(0xe8e4dc, 0.18);
     rim.position.set(2, 4, -9);
     this.scene.add(rim);
-    this.scene.add(new THREE.AmbientLight(0xddd8d0, 0.16));
+    this.scene.add(new THREE.AmbientLight(0xe8e4dc, 0.28));
   }
 
   private bindUi(): void {

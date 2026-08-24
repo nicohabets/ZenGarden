@@ -35,12 +35,12 @@ export class SandField {
     const mat = new THREE.MeshStandardMaterial({
       map: this.texture,
       bumpMap: this.texture,
-      bumpScale: 0.42,
+      bumpScale: 0.28,
       displacementMap: this.texture,
-      displacementScale: 0.038,
-      roughness: 0.97,
+      displacementScale: 0.02,
+      roughness: 0.98,
       metalness: 0,
-      color: 0xe8e4dc,
+      color: 0xf6f3ec,
     });
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
@@ -52,25 +52,25 @@ export class SandField {
     const { ctx, canvas } = this;
     const rng = mulberry32(seed);
     const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    g.addColorStop(0, "#d8d4cc");
-    g.addColorStop(0.48, "#e4e0d8");
-    g.addColorStop(1, "#ccc8c0");
+    g.addColorStop(0, "#eceae4");
+    g.addColorStop(0.48, "#f5f2eb");
+    g.addColorStop(1, "#e4e1d8");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    for (let i = 0; i < 22000; i++) {
+    for (let i = 0; i < 26000; i++) {
       const x = rng() * canvas.width;
       const y = rng() * canvas.height;
-      const a = 0.028 + rng() * 0.07;
+      const a = 0.02 + rng() * 0.05;
       const cool = rng() > 0.5;
-      ctx.fillStyle = cool ? `rgba(72,70,66,${a})` : `rgba(248,246,240,${a})`;
+      ctx.fillStyle = cool ? `rgba(92,90,86,${a})` : `rgba(255,253,248,${a})`;
       ctx.fillRect(x, y, 1, 1);
     }
-    for (let i = 0; i < 2800; i++) {
+    for (let i = 0; i < 2200; i++) {
       const x = rng() * canvas.width;
       const y = rng() * canvas.height;
-      const a = 0.04 + rng() * 0.08;
-      ctx.fillStyle = rng() > 0.55 ? `rgba(96,94,88,${a})` : `rgba(236,232,224,${a})`;
+      const a = 0.03 + rng() * 0.06;
+      ctx.fillStyle = rng() > 0.55 ? `rgba(110,108,102,${a})` : `rgba(244,242,236,${a})`;
       ctx.fillRect(x, y, 1 + rng(), 1);
     }
     this.markDirty();
@@ -108,8 +108,8 @@ export class SandField {
       const depth = 1 - Math.abs(t - center) / (center + 0.01);
       const ox = nx * off;
       const oy = ny * off;
-      ctx.strokeStyle = `rgba(58, 56, 52, ${0.2 + depth * 0.22})`;
-      ctx.lineWidth = 1.35 + depth * 1.45;
+      ctx.strokeStyle = `rgba(78, 76, 70, ${0.16 + depth * 0.18})`;
+      ctx.lineWidth = 1.25 + depth * 1.25;
       ctx.beginPath();
       ctx.moveTo(a.u + ox, a.v + oy);
       ctx.lineTo(b.u + ox, b.v + oy);
@@ -134,8 +134,8 @@ export class SandField {
     ctx.lineCap = "butt";
     ctx.lineJoin = "miter";
     for (let r = gap * 1.55; r < maxR; r += gap * 1.75) {
-      this.strokePolygon(c.u, c.v, r, sides, "rgba(58, 56, 52, 0.26)", 2.15);
-      this.strokePolygon(c.u, c.v, r + 1.7, sides, "rgba(248, 246, 240, 0.14)", 1.05);
+      this.strokePolygon(c.u, c.v, r, sides, "rgba(78, 76, 70, 0.2)", 2);
+      this.strokePolygon(c.u, c.v, r + 1.7, sides, "rgba(255, 252, 246, 0.12)", 1);
     }
     this.markDirty();
   }
@@ -148,8 +148,8 @@ export class SandField {
     ctx.lineCap = "butt";
     ctx.lineJoin = "miter";
     for (let y = inset; y < TEX_H - inset; y += gap) {
-      ctx.strokeStyle = "rgba(58, 56, 52, 0.2)";
-      ctx.lineWidth = 2.05;
+      ctx.strokeStyle = "rgba(78, 76, 70, 0.16)";
+      ctx.lineWidth = 1.85;
       ctx.beginPath();
       ctx.moveTo(inset, y);
       ctx.lineTo(TEX_W - inset, y);
@@ -200,13 +200,16 @@ export class SandField {
     const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
     const offsets: number[] = [];
     const steps = Math.max(8, Math.floor(len / 5));
+    let prev = 0;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const cx = a.u + dx * t;
       const cy = a.v + dy * t;
-      let best = 0;
+      let best = prev;
       let bestDark = 999;
-      for (let o = -10; o <= 10; o++) {
+      const lo = i === 0 ? -12 : prev - 3;
+      const hi = i === 0 ? 12 : prev + 3;
+      for (let o = lo; o <= hi; o++) {
         const x = Math.round(cx + nx * o);
         const y = Math.round(cy + ny * o);
         if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
@@ -217,6 +220,7 @@ export class SandField {
           best = o;
         }
       }
+      prev = best;
       offsets.push(best);
     }
     const mean = offsets.reduce((s, v) => s + v, 0) / offsets.length;

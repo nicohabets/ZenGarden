@@ -8,12 +8,12 @@ function clayTexture(): THREE.CanvasTexture {
   canvas.height = 128;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("clay texture");
-  ctx.fillStyle = "#b08a58";
+  ctx.fillStyle = "#d2a86a";
   ctx.fillRect(0, 0, 128, 128);
   for (let i = 0; i < 900; i++) {
     const x = (i * 17) % 128;
     const y = (i * 31 + 5) % 128;
-    ctx.fillStyle = i % 4 === 0 ? "#9a7548" : i % 3 === 0 ? "#c49a68" : "#a87e50";
+    ctx.fillStyle = i % 4 === 0 ? "#b88a52" : i % 3 === 0 ? "#e0ba7c" : "#c89860";
     ctx.fillRect(x, y, 2, 1);
   }
   const tex = new THREE.CanvasTexture(canvas);
@@ -67,37 +67,75 @@ export function createFrame(): THREE.Group {
   return group;
 }
 
+function islandGeometry(seed: number): THREE.BufferGeometry {
+  const geo = new THREE.SphereGeometry(1, 24, 16);
+  const rng = mulberry32(seed);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const n = v.clone().normalize();
+    const wobble =
+      0.16 * Math.sin(v.x * 3.1 + seed) +
+      0.11 * Math.cos(v.z * 4.2 + seed * 0.7) +
+      0.05 * (rng() - 0.5);
+    v.addScaledVector(n, wobble);
+    v.y *= 0.22;
+    if (v.y < 0) v.y *= 0.25;
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export function createMoss(states: MossState[]): THREE.Group {
   const group = new THREE.Group();
-  const colors = [0x3a4632, 0x445238, 0x33402c, 0x4a5440];
+  const mossColors = [0x3a4632, 0x445238, 0x384632];
+  const earth = new THREE.MeshStandardMaterial({
+    color: 0x5a4e3c,
+    roughness: 0.98,
+    metalness: 0,
+  });
   for (const s of states) {
-    const rng = mulberry32(hashFromId(s.id));
+    const seed = hashFromId(s.id);
+    const rng = mulberry32(seed);
     const island = new THREE.Group();
-    island.position.set(s.x, GARDEN.sandY + 0.015, s.z);
+    island.position.set(s.x, GARDEN.sandY + 0.012, s.z);
     island.rotation.y = s.rotY;
     island.userData.kind = "moss";
 
-    const lobes = 5 + Math.floor(rng() * 3);
-    for (let i = 0; i < lobes; i++) {
-      const color = colors[Math.abs(hashFromId(s.id) + i) % colors.length];
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 14, 10),
+    const soil = new THREE.Mesh(islandGeometry(seed ^ 0x51), earth);
+    soil.scale.set(s.scale * 0.58, s.scale * 0.09, s.scale * 0.5);
+    soil.receiveShadow = true;
+    soil.userData.kind = "moss";
+    island.add(soil);
+
+    const moss = new THREE.Mesh(
+      islandGeometry(seed),
+      new THREE.MeshStandardMaterial({
+        color: mossColors[seed % mossColors.length],
+        roughness: 0.99,
+        metalness: 0,
+      }),
+    );
+    moss.scale.set(s.scale * 0.52, s.scale * 0.12, s.scale * 0.44);
+    moss.position.y = 0.02;
+    moss.receiveShadow = true;
+    moss.userData.kind = "moss";
+    island.add(moss);
+
+    if (rng() > 0.35) {
+      const bump = new THREE.Mesh(
+        islandGeometry(seed ^ 17),
         new THREE.MeshStandardMaterial({
-          color,
-          roughness: 0.98,
-          metalness: 0,
+          color: 0x4a5440,
+          roughness: 0.99,
         }),
       );
-      const ang = (i / lobes) * Math.PI * 2 + rng() * 0.4;
-      const dist = i === 0 ? 0 : 0.18 + rng() * 0.22;
-      const sx = s.scale * (0.42 + rng() * 0.18);
-      const sz = s.scale * (0.34 + rng() * 0.16);
-      mesh.scale.set(sx, s.scale * (0.07 + rng() * 0.035), sz);
-      mesh.position.set(Math.cos(ang) * dist * s.scale, 0, Math.sin(ang) * dist * s.scale);
-      mesh.rotation.y = rng() * Math.PI;
-      mesh.receiveShadow = true;
-      mesh.userData.kind = "moss";
-      island.add(mesh);
+      bump.scale.set(s.scale * 0.22, s.scale * 0.07, s.scale * 0.2);
+      bump.position.set(randRange(rng, -0.18, 0.18) * s.scale, 0.03, randRange(rng, -0.14, 0.14) * s.scale);
+      bump.userData.kind = "moss";
+      island.add(bump);
     }
     group.add(island);
   }
@@ -225,10 +263,12 @@ export function createLanterns(states: LanternState[]): THREE.Group {
 export function createBackdrop(): THREE.Group {
   const group = new THREE.Group();
   const clay = new THREE.MeshStandardMaterial({
-    color: 0xc9a06a,
+    color: 0xe0b878,
     map: clayTexture(),
-    roughness: 0.94,
+    roughness: 0.92,
     metalness: 0,
+    emissive: 0x3a2810,
+    emissiveIntensity: 0.08,
   });
   const tile = new THREE.MeshStandardMaterial({
     color: 0x2a2622,
@@ -236,31 +276,36 @@ export function createBackdrop(): THREE.Group {
     metalness: 0.04,
   });
 
-  const wallH = 1.28;
+  const wallH = 1.72;
   const wallY = wallH / 2 - 0.02;
-  const thick = 0.16;
-  const backZ = -GARDEN.depth / 2 - 1.05;
-  const sideX = GARDEN.width / 2 + 1.15;
-  const backW = GARDEN.width + 2.6;
-  const sideL = GARDEN.depth + 1.55;
+  const thick = 0.18;
+  const backZ = -GARDEN.depth / 2 - 0.72;
+  const sideX = GARDEN.width / 2 + 0.82;
+  const backW = GARDEN.width + 1.9;
+  const sideL = GARDEN.depth + 1.15;
 
   const back = new THREE.Mesh(new THREE.BoxGeometry(backW, wallH, thick), clay);
   back.position.set(0, wallY, backZ);
   back.castShadow = true;
-  back.receiveShadow = true;
   group.add(back);
 
   const left = new THREE.Mesh(new THREE.BoxGeometry(thick, wallH, sideL), clay);
-  left.position.set(-sideX, wallY, -0.35);
+  left.position.set(-sideX, wallY, -0.2);
   left.castShadow = true;
-  left.receiveShadow = true;
   group.add(left);
 
   const right = new THREE.Mesh(new THREE.BoxGeometry(thick, wallH, sideL), clay);
-  right.position.set(sideX, wallY, -0.35);
+  right.position.set(sideX, wallY, -0.2);
   right.castShadow = true;
-  right.receiveShadow = true;
   group.add(right);
+
+  const deck = new THREE.Mesh(
+    new THREE.BoxGeometry(GARDEN.width + 0.6, 0.09, 1.35),
+    new THREE.MeshStandardMaterial({ color: 0x4a4034, roughness: 0.88 }),
+  );
+  deck.position.set(0, -0.01, GARDEN.depth / 2 + 0.85);
+  deck.receiveShadow = true;
+  group.add(deck);
 
   const cap = (w: number, d: number, x: number, z: number, rotY = 0) => {
     const roof = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), tile);
@@ -269,9 +314,9 @@ export function createBackdrop(): THREE.Group {
     roof.castShadow = true;
     group.add(roof);
   };
-  cap(backW + 0.28, 0.34, 0, backZ);
-  cap(0.34, sideL + 0.16, -sideX, -0.35);
-  cap(0.34, sideL + 0.16, sideX, -0.35);
+  cap(backW + 0.28, 0.36, 0, backZ);
+  cap(0.36, sideL + 0.16, -sideX, -0.2);
+  cap(0.36, sideL + 0.16, sideX, -0.2);
 
   return group;
 }

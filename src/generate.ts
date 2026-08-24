@@ -75,11 +75,11 @@ function placeIshiGumi(rng: () => number, occupied: { p: Point; r: number }[]): 
   let clusterId = 0;
 
   const plans: ClusterPlan[] = [
-    { count: 5, x: -4.7, z: -1.55, scale: 0.92, variants: [1, 0, 4, 2, 3] },
-    { count: 3, x: -1.55, z: -2.45, scale: 0.8, variants: [4, 2, 0] },
-    { count: 3, x: 0.85, z: -0.28, scale: 0.88, variants: [1, 3, 2] },
-    { count: 3, x: 3.35, z: -2.25, scale: 0.76, variants: [4, 0, 2] },
-    { count: 1, x: 5.05, z: 0.85, scale: 0.64, variants: [1] },
+    { count: 5, x: -4.85, z: -1.7, scale: 0.92, variants: [1, 0, 4, 2, 3] },
+    { count: 3, x: -1.55, z: -2.5, scale: 0.8, variants: [4, 2, 0] },
+    { count: 3, x: 0.95, z: -0.45, scale: 0.88, variants: [1, 3, 2] },
+    { count: 3, x: 3.55, z: -2.3, scale: 0.76, variants: [4, 0, 2] },
+    { count: 1, x: 1.85, z: 1.55, scale: 0.7, variants: [1] },
   ];
 
   for (const plan of plans) {

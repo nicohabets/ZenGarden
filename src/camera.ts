@@ -12,7 +12,7 @@ export class CameraRig {
   readonly target = new THREE.Vector3(0, 0.15, 0);
   azimuth = Math.PI / 4;
   elevation = ISO_ELEVATION;
-  zoom = 13.2;
+  zoom = 14;
   aspect = 1;
 
   constructor() {
