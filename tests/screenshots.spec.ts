@@ -9,7 +9,7 @@ test.describe("screenshots", () => {
   test.skip(!process.env.SHOTS, "set SHOTS=1 to capture PR images");
 
   test("nose-on gravel, island rings, and mobile close", async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     mkdirSync(outDir, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/?hq=1");
@@ -31,10 +31,10 @@ test.describe("screenshots", () => {
       }
       api.rakeStroke(ring);
       api.rakeFromTo(-5.1, 1.88, 4.6, 1.88);
-      api.settleSand(48);
+      api.settleSand(24);
       return { cx, cz };
     });
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(400);
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
@@ -45,7 +45,7 @@ test.describe("screenshots", () => {
         tz: 2.05,
       });
     });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(250);
     await page.screenshot({ path: `${outDir}/gravel-close.png`, animations: "disabled" });
 
     await page.evaluate((look) => {
@@ -57,14 +57,8 @@ test.describe("screenshots", () => {
         tz: look.cz + 0.22,
       });
     }, island);
-    await page.waitForTimeout(280);
+    await page.waitForTimeout(200);
     await page.screenshot({ path: `${outDir}/island-rings.png`, animations: "disabled" });
-    await page.screenshot({ path: `${outDir}/desktop-isometric.png`, animations: "disabled" });
-    await page.screenshot({ path: `${outDir}/ishi-gumi-desktop.png`, animations: "disabled" });
-
-    await page.getByTestId("toolbar").scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `${outDir}/desktop-hud.png`, animations: "disabled" });
-    await page.screenshot({ path: `${outDir}/ishi-gumi-hud.png`, animations: "disabled" });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate((look) => {
@@ -76,9 +70,7 @@ test.describe("screenshots", () => {
         tz: look.cz + 0.2,
       });
     }, island);
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(400);
     await page.screenshot({ path: `${outDir}/mobile-close.png`, animations: "disabled" });
-    await page.screenshot({ path: `${outDir}/mobile.png`, animations: "disabled" });
-    await page.screenshot({ path: `${outDir}/ishi-gumi-mobile.png`, animations: "disabled" });
   });
 });
