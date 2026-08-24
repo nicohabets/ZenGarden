@@ -80,6 +80,7 @@ export class GrainCloud {
     const cellBudget = Math.floor(this.maxCount * 0.34);
     const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
     const court = cam.zoom >= 1.25;
+    const hq = wantHighQuality();
     const worldSize = THREE.MathUtils.clamp(spacing * (court ? 2.4 : 2.15), 0.0014, court ? 0.078 : 0.07);
 
     let n = 0;
@@ -89,7 +90,7 @@ export class GrainCloud {
         const cx = x0 + hash2(i, 17) * spanX;
         const cz = z0 + hash2(i, 31) * spanZ;
         if (blocked(cx, cz, blockers)) continue;
-        const h = sand.sampleVisual(cx, cz);
+        const h = hq ? sand.sampleVisual(cx, cz) : sand.sampleHeight(cx, cz);
         const members = 2 + ((hash2(i, 7) * 3) | 0);
         for (let m = 0; m < members && n < cellBudget; m++) {
           const ang = hash2(i + m * 3, 11) * Math.PI * 2;
@@ -115,7 +116,7 @@ export class GrainCloud {
           const gz = z + (hz - 0.5) * spacing * 1.9;
           if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
           if (blocked(gx, gz, blockers)) continue;
-          const h = sand.sampleVisual(gx, gz);
+          const h = hq ? sand.sampleVisual(gx, gz) : sand.sampleHeight(gx, gz);
           n = this.pushGrain(n, gx, gz, h, keep, 0);
           if (h > -0.004 && keep > 0.55 && n < cellBudget) {
             const ang = hash2(row + 13, col + 31) * Math.PI * 2;
@@ -135,7 +136,9 @@ export class GrainCloud {
     for (let i = 0; i < surface && n < stackCap; i++) {
       const h = this.hs[i];
       if (h < 0.003) continue;
-      const stacks = h > 0.02 ? 18 : h > 0.012 ? 13 : h > 0.007 ? 9 : 5;
+      const stacks = hq
+        ? h > 0.02 ? 18 : h > 0.012 ? 13 : h > 0.007 ? 9 : 5
+        : h > 0.02 ? 10 : h > 0.012 ? 7 : h > 0.007 ? 5 : 3;
       const dir = sand.sampleDir(this.xs[i], this.zs[i]);
       let px = -dir.z;
       let pz = dir.x;
@@ -162,14 +165,16 @@ export class GrainCloud {
       }
     }
 
-    sand.forEachBank(x0, z0, x1, z1, Math.max(0.02, spacing * 1.2), (x, z, tx, tz, h) => {
+    const bankStep = hq ? Math.max(0.02, spacing * 1.2) : Math.max(0.038, spacing * 1.8);
+    const bankLayers = hq ? 7 : 4;
+    sand.forEachBank(x0, z0, x1, z1, bankStep, (x, z, tx, tz, h) => {
       if (n >= this.maxCount) return;
       if (blocked(x, z, blockers)) return;
       const seed = hash2((x * 73) | 0, (z * 91) | 0);
       n = this.pushGrain(n, x + (seed - 0.5) * 0.012, z + (hash2((z * 91) | 0, 5) - 0.5) * 0.012, h, seed, 0);
       const nx = -tz;
       const nz = tx;
-      for (let layer = 1; layer <= 7 && n < this.maxCount; layer++) {
+      for (let layer = 1; layer <= bankLayers && n < this.maxCount; layer++) {
         const s = hash2(((x * 41) | 0) + layer, ((z * 37) | 0) + 11);
         n = this.pushGrain(
           n,

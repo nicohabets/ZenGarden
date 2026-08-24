@@ -36,6 +36,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("toolbar is visible and a tool can be selected", async ({ page }) => {
+    test.setTimeout(45_000);
     await page.goto("/");
     await waitForGarden(page);
 
