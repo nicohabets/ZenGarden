@@ -15,12 +15,12 @@ const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
 
 /** Bank growth in metres so piles stay readable at every zoom. */
-const LAYER_H = 0.0032;
-const SLUMP = 0.008;
+const LAYER_H = 0.0024;
+const SLUMP = 0.006;
 
 /**
  * Packed millimetre grit. A rake scoops a valley and stacks that mass on
- * slumped banks — grooves are piles of grains, not a thinned carpet.
+ * slumped banks — the trough stays a thinner sandy bed, never a bare slab.
  */
 export class GrainCloud {
   readonly mesh: THREE.InstancedMesh;
@@ -42,10 +42,8 @@ export class GrainCloud {
     this.layers = new Float32Array(this.maxCount);
 
     const geo = makeGritGeometry();
-    const mat = new THREE.MeshStandardMaterial({
-      roughness: 0.96,
-      metalness: 0,
-      envMapIntensity: 0,
+    const mat = new THREE.MeshLambertMaterial({
+      color: 0xffffff,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
     this.mesh.frustumCulled = false;
@@ -77,68 +75,65 @@ export class GrainCloud {
     const z1 = Math.min(GARDEN.depth / 2 - 0.03, bounds.z1);
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
-    const cellBudget = Math.floor(this.maxCount * (wantHighQuality() ? 0.7 : 0.52));
-    const spacing = Math.max(0.0011, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
-    const court = cam.zoom >= 1.25;
     const hq = wantHighQuality();
-    const worldSize = THREE.MathUtils.clamp(spacing * 1.12, 0.0011, hq ? 0.014 : 0.022);
+    const cellBudget = Math.floor(this.maxCount * (hq ? 0.78 : 0.74));
+    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
+    const worldSize = Math.min(spacing * 1.28, hq ? 0.0036 : 0.0072);
 
     let n = 0;
-    if (court) {
-      const clumps = Math.floor(cellBudget / 3);
-      for (let i = 0; i < clumps && n < cellBudget; i++) {
-        const cx = x0 + hash2(i, 17) * spanX;
-        const cz = z0 + hash2(i, 31) * spanZ;
-        if (blocked(cx, cz, blockers)) continue;
-        const h = hq ? sand.sampleVisual(cx, cz) : sand.sampleHeight(cx, cz);
-        const members = 2 + ((hash2(i, 7) * 3) | 0);
-        for (let m = 0; m < members && n < cellBudget; m++) {
-          const ang = hash2(i + m * 3, 11) * Math.PI * 2;
-          const rad = spacing * (0.2 + hash2(i, m + 4) * 1.1);
-          const gx = cx + Math.cos(ang) * rad;
-          const gz = cz + Math.sin(ang) * rad;
-          if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
-          if (blocked(gx, gz, blockers)) continue;
-          n = this.pushGrain(n, gx, gz, h, hash2(i + m, 19), 0);
-        }
-      }
-    } else {
-      let row = 0;
-      for (let z = z0; z <= z1 && n < cellBudget; z += spacing, row++) {
-        const rowShift = (row % 2) * spacing * 0.5;
-        for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
-          const col = ((x - x0) / spacing) | 0;
-          const keep = hash2(row * 29 + 3, col * 17 + 8);
-          if (keep < 0.04) continue;
-          const hx = hash2(row * 19 + 3, col * 11 + 5);
-          const hz = hash2(row * 41 + 7, col * 23 + 2);
-          const gx = x + (hx - 0.5) * spacing * 0.62;
-          const gz = z + (hz - 0.5) * spacing * 0.62;
-          if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
-          if (blocked(gx, gz, blockers)) continue;
-          const h = hq ? sand.sampleVisual(gx, gz) : sand.sampleHeight(gx, gz);
-          n = this.pushGrain(n, gx, gz, h, keep, 0);
-          if (h > -0.004 && keep > 0.55 && n < cellBudget) {
-            const ang = hash2(row + 13, col + 31) * Math.PI * 2;
-            const rad = spacing * (0.28 + keep * 0.4);
-            const sx = gx + Math.cos(ang) * rad;
-            const sz = gz + Math.sin(ang) * rad;
-            if (sx >= x0 && sx <= x1 && sz >= z0 && sz <= z1 && !blocked(sx, sz, blockers)) {
-              n = this.pushGrain(n, sx, sz, h, hash2(row + 7, col + 19), 0);
-            }
-          }
-        }
+    let row = 0;
+    const jitter = hq && cam.zoom < 1.25 ? 0.22 : 0.38;
+    for (let z = z0; z <= z1 && n < cellBudget; z += spacing, row++) {
+      const rowShift = (row % 2) * spacing * 0.5;
+      for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
+        const col = ((x - x0) / spacing) | 0;
+        const hx = hash2(row * 19 + 3, col * 11 + 5);
+        const hz = hash2(row * 41 + 7, col * 23 + 2);
+        const gx = x + (hx - 0.5) * spacing * jitter;
+        const gz = z + (hz - 0.5) * spacing * jitter;
+        if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
+        if (blocked(gx, gz, blockers)) continue;
+        const mass = sand.sampleHeight(gx, gz);
+        n = this.pushGrain(n, gx, gz, mass, hx, 0);
       }
     }
 
+    const pathStep = hq ? Math.max(spacing * 0.65, 0.0035) : Math.max(0.024, spacing);
+    const troughCap = Math.floor(this.maxCount * (hq ? 0.88 : 0.82));
+    const troughHalf = hq ? 0.046 : 0.028;
+    const troughStep = Math.max(spacing * 0.78, hq ? 0.0024 : 0.01);
+    sand.forEachTrough(x0, z0, x1, z1, pathStep, (x, z, tx, tz) => {
+      if (n >= troughCap) return;
+      const across = Math.hypot(tx, tz) || 1;
+      const nx = -tz / across;
+      const nz = tx / across;
+      for (let k = -troughHalf; k <= troughHalf && n < troughCap; k += troughStep) {
+        const gx = x + nx * k + (hash2((x * 67 + k * 40) | 0, 3) - 0.5) * spacing * 0.28;
+        const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.28;
+        if (blocked(gx, gz, blockers)) continue;
+        const mass = sand.sampleHeight(gx, gz);
+        n = this.pushGrain(n, gx, gz, mass, hash2((gx * 90) | 0, (gz * 90) | 0), 0);
+      }
+    });
+
     const surface = n;
-    const stackCap = Math.floor(this.maxCount * 0.76);
+    const stackCap = Math.floor(this.maxCount * 0.94);
     for (let i = 0; i < surface && n < stackCap; i++) {
       const h = this.hs[i];
       if (h < 0.003) continue;
       const stacks = hq
-        ? h > 0.02 ? 10 : h > 0.012 ? 7 : h > 0.007 ? 5 : 3
-        : h > 0.02 ? 6 : h > 0.012 ? 4 : 2;
+        ? h > 0.02
+          ? 8
+          : h > 0.012
+            ? 6
+            : h > 0.007
+              ? 4
+              : 3
+        : h > 0.02
+          ? 5
+          : h > 0.012
+            ? 3
+            : 2;
       const dir = sand.sampleDir(this.xs[i], this.zs[i]);
       let px = -dir.z;
       let pz = dir.x;
@@ -153,53 +148,31 @@ export class GrainCloud {
       for (let layer = 1; layer <= stacks && n < stackCap; layer++) {
         const seed = hash2(i + 19 + layer * 7, 23);
         const slump = layer * SLUMP;
-        const wobble = (seed - 0.5) * 0.012;
-        n = this.pushGrain(
-          n,
-          this.xs[i] + px * slump + wobble,
-          this.zs[i] + pz * slump + (hash2(i + 5, 41 + layer) - 0.5) * 0.012,
-          h,
-          seed,
-          layer,
-        );
+        const ox = this.xs[i] + px * slump + (seed - 0.5) * 0.008;
+        const oz = this.zs[i] + pz * slump + (hash2(i + 5, 41 + layer) - 0.5) * 0.008;
+        if (blocked(ox, oz, blockers)) continue;
+        n = this.pushGrain(n, ox, oz, h, seed, layer);
       }
     }
 
-    const pathStep = hq ? Math.max(0.012, spacing * 0.95) : Math.max(0.028, spacing * 1.6);
-    sand.forEachTrough(x0, z0, x1, z1, pathStep, (x, z, _tx, _tz, h) => {
-      if (n >= this.maxCount) return;
-      if (blocked(x, z, blockers)) return;
-      const seed = hash2((x * 67) | 0, (z * 83) | 0);
-      n = this.pushGrain(n, x + (seed - 0.5) * spacing * 0.4, z + (hash2((z * 83) | 0, 4) - 0.5) * spacing * 0.4, h, seed, 0);
-      if (hq) {
-        n = this.pushGrain(
-          n,
-          x + (hash2((x * 17) | 0, 9) - 0.5) * spacing * 0.35,
-          z + (hash2(8, (z * 19) | 0) - 0.5) * spacing * 0.35,
-          h,
-          hash2((x * 13) | 0, 21),
-          0,
-        );
-      }
-    });
-    const bankLayers = hq ? 6 : 3;
+    const bankLayers = hq ? 5 : 3;
     sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, tx, tz, h) => {
       if (n >= this.maxCount) return;
-      if (blocked(x, z, blockers)) return;
+      const across = Math.hypot(tx, tz) || 1;
+      const nx = -tz / across;
+      const nz = tx / across;
       const seed = hash2((x * 73) | 0, (z * 91) | 0);
-      n = this.pushGrain(n, x + (seed - 0.5) * spacing * 0.35, z + (hash2((z * 91) | 0, 5) - 0.5) * spacing * 0.35, h, seed, 0);
-      const nx = -tz;
-      const nz = tx;
+      const bx = x + (seed - 0.5) * spacing * 0.28;
+      const bz = z + (hash2((z * 91) | 0, 5) - 0.5) * spacing * 0.28;
+      if (!blocked(bx, bz, blockers)) {
+        n = this.pushGrain(n, bx, bz, Math.max(h, sand.sampleHeight(bx, bz)), seed, 0);
+      }
       for (let layer = 1; layer <= bankLayers && n < this.maxCount; layer++) {
         const s = hash2(((x * 41) | 0) + layer, ((z * 37) | 0) + 11);
-        n = this.pushGrain(
-          n,
-          x + nx * layer * SLUMP * 0.45 + (s - 0.5) * spacing * 0.3,
-          z + nz * layer * SLUMP * 0.45 + (hash2(layer + 3, 19) - 0.5) * spacing * 0.3,
-          h,
-          s,
-          layer,
-        );
+        const ox = x + nx * layer * SLUMP * 0.4 + (s - 0.5) * spacing * 0.22;
+        const oz = z + nz * layer * SLUMP * 0.4 + (hash2(layer + 3, 19) - 0.5) * spacing * 0.22;
+        if (blocked(ox, oz, blockers)) continue;
+        n = this.pushGrain(n, ox, oz, h, s, layer);
       }
     });
 
@@ -224,19 +197,17 @@ export class GrainCloud {
       const seed = this.seeds[i];
       const h = this.hs[i];
       const layer = this.layers[i];
-      const y =
-        GARDEN.sandY +
-        Math.max(h * SAND_HEIGHT_GAIN, visualHeight(h)) +
-        worldSize * 0.38 +
-        layer * LAYER_H;
-      const s = worldSize * (0.86 + seed * 0.22);
+      const floor = h * SAND_HEIGHT_GAIN;
+      const pile = h > 0.002 ? Math.max(0, visualHeight(h) - floor) : 0;
+      const y = GARDEN.sandY + floor + pile + worldSize * 0.42 + layer * LAYER_H;
+      const s = worldSize * (0.82 + seed * 0.28);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
-      _dummy.rotation.set(seed * 5.1, seed * 7.3, hash2(i + 3, 17) * 6.2);
-      _dummy.scale.set(s * (0.82 + seed * 0.28), s * (0.42 + seed * 0.22), s * (0.7 + hash2(i, 9) * 0.3));
+      _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
+      _dummy.scale.set(s * (0.7 + seed * 0.5), s * (0.2 + seed * 0.16), s * (0.48 + hash2(i, 9) * 0.52));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const lift = THREE.MathUtils.clamp(layer * 0.01, 0, 0.05);
-      _color.setRGB(0.82 + seed * 0.07 + lift, 0.78 + seed * 0.05 + lift * 0.6, 0.7 + seed * 0.04 + lift * 0.35);
+      const lift = THREE.MathUtils.clamp(layer * 0.012, 0, 0.045);
+      _color.setRGB(0.76 + seed * 0.08 + lift, 0.72 + seed * 0.06 + lift * 0.55, 0.64 + seed * 0.05 + lift * 0.3);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -247,20 +218,21 @@ export class GrainCloud {
 /** Expand leftover rake relief so a scooped bank still reads after slump. */
 function visualHeight(h: number): number {
   const t = THREE.MathUtils.clamp(h / 0.055, -1, 1);
-  const mag = Math.pow(Math.abs(t), 0.46) * 0.155;
+  const mag = Math.pow(Math.abs(t), 0.46) * 0.12;
   return Math.sign(t) * mag;
 }
 
+/** Angular flattened chip — dry grit, not a sphere or rice grain. */
 function makeGritGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.IcosahedronGeometry(0.5, 0);
-  geo.scale(1.15, 0.34, 0.82);
+  const geo = new THREE.TetrahedronGeometry(0.52, 0);
+  geo.scale(1.2, 0.38, 0.86);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
-    const k = hash2((x * 47) | 0, (z * 29) | 0);
-    pos.setXYZ(i, x * (0.78 + k * 0.28), y * (0.7 + k * 0.35), z * (0.74 + (1 - k) * 0.3));
+    const k = hash2((x * 53) | 0, (z * 37) | 0);
+    pos.setXYZ(i, x * (0.72 + k * 0.4), y * (0.55 + k * 0.5), z * (0.68 + (1 - k) * 0.38));
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();
@@ -299,7 +271,16 @@ function blocked(x: number, z: number, blockers: Blocker[]): boolean {
   for (const b of blockers) {
     const dx = x - b.x;
     const dz = z - b.z;
-    if (dx * dx + dz * dz < b.r * b.r * 1.28) return true;
+    if (b.rx && b.rz) {
+      const rot = b.rotY ?? 0;
+      const c = Math.cos(rot);
+      const s = Math.sin(rot);
+      const lx = dx * c + dz * s;
+      const lz = -dx * s + dz * c;
+      if ((lx * lx) / (b.rx * b.rx) + (lz * lz) / (b.rz * b.rz) < 1.06) return true;
+    } else if (dx * dx + dz * dz < b.r * b.r * 1.35) {
+      return true;
+    }
   }
   return false;
 }

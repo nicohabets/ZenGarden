@@ -115,7 +115,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([214, 206, 194, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([206, 196, 178, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
     const mat = new THREE.MeshLambertMaterial({
@@ -124,12 +124,51 @@ export class SandField {
       displacementMap: this.texture,
       displacementScale: SAND_DISP_SCALE,
       displacementBias: SAND_DISP_BIAS,
-      emissive: 0xc8c0b4,
-      emissiveIntensity: 0.35,
     });
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = 1.5;
     mat.polygonOffsetUnits = 1.5;
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+          varying vec3 vGritPos;`,
+        )
+        .replace(
+          "#include <worldpos_vertex>",
+          `#include <worldpos_vertex>
+          vGritPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+          varying vec3 vGritPos;
+          float gritHash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+          }
+          float gritNoise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            float a = gritHash(i);
+            float b = gritHash(i + vec2(1.0, 0.0));
+            float c = gritHash(i + vec2(0.0, 1.0));
+            float d = gritHash(i + vec2(1.0, 1.0));
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+          }`,
+        )
+        .replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+          float g =
+            gritNoise(vGritPos.xz * 260.0) * 0.5 +
+            gritNoise(vGritPos.xz * 640.0) * 0.35 +
+            gritNoise(vGritPos.xz * 1400.0) * 0.15;
+          diffuseColor.rgb *= 0.86 + g * 0.2;`,
+        );
+    };
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
