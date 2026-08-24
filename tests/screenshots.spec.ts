@@ -37,11 +37,11 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 1.05,
-        elevation: 0.22,
-        zoom: 0.46,
-        tx: 2.55,
-        tz: 2.02,
+        azimuth: 1.12,
+        elevation: 0.21,
+        zoom: 0.44,
+        tx: -2.55,
+        tz: 2.08,
       });
     });
     await page.waitForTimeout(400);
