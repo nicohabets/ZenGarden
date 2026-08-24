@@ -9,7 +9,7 @@ test.describe("screenshots", () => {
   test.skip(!process.env.SHOTS, "set SHOTS=1 to capture PR images");
 
   test("nose-on gravel, island rings, and mobile close", async ({ page }) => {
-    test.setTimeout(360_000);
+    test.setTimeout(480_000);
     mkdirSync(outDir, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/?hq=1");
@@ -38,10 +38,10 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.05,
+        azimuth: 0.04,
         elevation: 0.185,
         zoom: 0.38,
-        tx: -2.4,
+        tx: 3.35,
         tz: 1.88,
       });
     });

@@ -14,14 +14,10 @@ export function grainBudget(): number {
 const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
 const _nudge = [
-  [0.045, 0],
-  [-0.045, 0],
-  [0, 0.045],
-  [0, -0.045],
-  [0.032, 0.032],
-  [-0.032, 0.032],
-  [0.032, -0.032],
-  [-0.032, -0.032],
+  [0.055, 0],
+  [-0.055, 0],
+  [0, 0.055],
+  [0, -0.055],
 ] as const;
 
 /**
@@ -100,8 +96,8 @@ export class GrainCloud {
         const col = ((x - x0) / spacing) | 0;
         const hx = hash2(row * 19 + 3, col * 11 + 5);
         const hz = hash2(row * 41 + 7, col * 23 + 2);
-        let gx = x + (hx - 0.5) * spacing * 0.82;
-        let gz = z + (hz - 0.5) * spacing * 0.82;
+        let gx = x + (hx - 0.5) * spacing * 0.94;
+        let gz = z + (hz - 0.5) * spacing * 0.94;
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
         const seed = hash2(row * 17 + 4, col * 13 + 9);
@@ -113,7 +109,7 @@ export class GrainCloud {
           h = moved.h;
           if (blocked(gx, gz, blockers)) continue;
         }
-        if (h < -0.01 && seed > 0.06) continue;
+        if (h < -0.004) continue;
         this.xs[n] = gx;
         this.zs[n] = gz;
         this.seeds[n] = seed;
@@ -125,8 +121,8 @@ export class GrainCloud {
     const surface = n;
     for (let i = 0; i < surface && n < this.maxCount; i++) {
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
-      if (h < 0.004) continue;
-      const stacks = h > 0.03 ? 5 : h > 0.018 ? 4 : h > 0.01 ? 3 : 2;
+      if (h < 0.003) continue;
+      const stacks = h > 0.024 ? 6 : h > 0.014 ? 5 : h > 0.008 ? 4 : 3;
       for (let layer = 1; layer <= stacks && n < this.maxCount; layer++) {
         const seed = hash2(i + 19 + layer * 7, 23);
         this.xs[n] = this.xs[i] + (this.seeds[i] - 0.5) * spacing * 0.45;
@@ -157,12 +153,12 @@ export class GrainCloud {
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
       const layer = this.layers[i];
       const pile = Math.max(0, h);
-      const y =
+        const y =
         GARDEN.sandY +
-        h * 2.15 +
-        0.0014 +
-        layer * (0.0048 + pile * 0.12) +
-        (seed - 0.5) * 0.001;
+        h * 2.4 +
+        0.0016 +
+        layer * (0.007 + pile * 0.16) +
+        (seed - 0.5) * 0.0012;
       const s = worldSize * (0.72 + seed * 0.3);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 4.2, seed * 6.1, hash2(i + 3, 17) * 5.4);
@@ -192,10 +188,10 @@ function nudgeToBank(sand: SandField, x: number, z: number, h0: number): { x: nu
       bz = nz;
     }
   }
-  if (bh > h0 + 0.004) {
+          if (bh > h0 + 0.003) {
     for (const [dx, dz] of _nudge) {
-      const nx = bx + dx * 0.7;
-      const nz = bz + dz * 0.7;
+      const nx = bx + dx;
+      const nz = bz + dz;
       const h = sand.sampleHeight(nx, nz);
       if (h > bh) {
         bh = h;
