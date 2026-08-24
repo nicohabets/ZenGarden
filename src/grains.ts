@@ -211,21 +211,21 @@ export class GrainCloud {
       let g = 0.64;
       let b = 0.54;
       if (bucket === 0) {
-        r = 0.78;
-        g = 0.74;
-        b = 0.64;
+        r = 0.82;
+        g = 0.78;
+        b = 0.68;
       } else if (bucket === 1) {
-        r = 0.7;
-        g = 0.66;
-        b = 0.54;
+        r = 0.74;
+        g = 0.7;
+        b = 0.58;
       } else if (bucket === 2) {
-        r = 0.6;
-        g = 0.58;
-        b = 0.5;
+        r = 0.68;
+        g = 0.64;
+        b = 0.54;
       } else {
-        r = 0.5;
-        g = 0.47;
-        b = 0.4;
+        r = 0.62;
+        g = 0.58;
+        b = 0.48;
       }
       const j = seed * 0.04;
       _color.setRGB(r + j + ridge + trough, g + j * 0.8 + ridge * 0.7 + trough, b + j * 0.6 + ridge * 0.45 + trough);
