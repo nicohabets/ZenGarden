@@ -37,11 +37,11 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.98,
-        elevation: 0.2,
-        zoom: 0.5,
-        tx: 0.15,
-        tz: 1.88,
+        azimuth: 1.05,
+        elevation: 0.22,
+        zoom: 0.46,
+        tx: 2.55,
+        tz: 2.02,
       });
     });
     await page.waitForTimeout(400);
@@ -51,9 +51,9 @@ test.describe("screenshots", () => {
       window.__ZEN_GARDEN__!.setCamera({
         azimuth: 0.72,
         elevation: 0.3,
-        zoom: 1.72,
-        tx: look.cx + 0.22,
-        tz: look.cz + 0.55,
+        zoom: 1.48,
+        tx: look.cx + 0.18,
+        tz: look.cz + 0.42,
       });
     }, island);
     await page.waitForTimeout(280);

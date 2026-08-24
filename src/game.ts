@@ -191,9 +191,9 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf3f0e8, 0x6a665c, 0.46);
+    const hemi = new THREE.HemisphereLight(0xf3f0e8, 0x6a665c, 0.52);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1dc, 1.62);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 1.48);
     sun.position.set(16.5, 4.1, 6.2);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -206,13 +206,13 @@ export class ZenGarden {
     sun.shadow.bias = -0.00045;
     sun.shadow.normalBias = 0.02;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xc8d0d6, 0.16);
+    const fill = new THREE.DirectionalLight(0xc8d0d6, 0.28);
     fill.position.set(-9, 5.2, -5);
     this.scene.add(fill);
-    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.12);
+    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.14);
     rim.position.set(2, 3.4, -9);
     this.scene.add(rim);
-    this.scene.add(new THREE.AmbientLight(0xe8e4dc, 0.14));
+    this.scene.add(new THREE.AmbientLight(0xe8e4dc, 0.2));
   }
 
   private bindUi(): void {

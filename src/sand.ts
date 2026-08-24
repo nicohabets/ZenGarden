@@ -12,6 +12,7 @@ export class SandField {
   readonly mesh: THREE.Mesh;
   readonly texture: THREE.CanvasTexture;
   readonly heightTexture: THREE.CanvasTexture;
+  readonly grainTexture: THREE.CanvasTexture;
   readonly canvas: HTMLCanvasElement;
   private readonly heightCanvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -36,35 +37,50 @@ export class SandField {
     this.paintBase(0x9e3779b9);
     this.texture = new THREE.CanvasTexture(this.canvas);
     this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.anisotropy = 8;
+    this.texture.anisotropy = 16;
     this.texture.wrapS = THREE.ClampToEdgeWrapping;
     this.texture.wrapT = THREE.ClampToEdgeWrapping;
-    this.texture.minFilter = THREE.LinearMipmapLinearFilter;
+    this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
-    this.texture.generateMipmaps = true;
+    this.texture.generateMipmaps = false;
 
     this.heightTexture = new THREE.CanvasTexture(this.heightCanvas);
     this.heightTexture.colorSpace = THREE.NoColorSpace;
-    this.heightTexture.anisotropy = 8;
+    this.heightTexture.anisotropy = 16;
     this.heightTexture.wrapS = THREE.ClampToEdgeWrapping;
     this.heightTexture.wrapT = THREE.ClampToEdgeWrapping;
-    this.heightTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    this.heightTexture.minFilter = THREE.LinearFilter;
     this.heightTexture.magFilter = THREE.LinearFilter;
-    this.heightTexture.generateMipmaps = true;
+    this.heightTexture.generateMipmaps = false;
+
+    this.grainTexture = makeGrainTile();
 
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, 220, 128);
     geo.rotateX(-Math.PI / 2);
+    const grainTex = this.grainTexture;
     const mat = new THREE.MeshStandardMaterial({
       map: this.texture,
       bumpMap: this.heightTexture,
-      bumpScale: 1.55,
+      bumpScale: 1.7,
       displacementMap: this.heightTexture,
-      displacementScale: 0.05,
+      displacementScale: 0.052,
       displacementBias: -0.02,
-      roughness: 0.9,
+      roughness: 0.88,
       metalness: 0,
       color: 0xf7f4ed,
     });
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uGrain = { value: grainTex };
+      shader.fragmentShader = `uniform sampler2D uGrain;\n${shader.fragmentShader}`.replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+         vec2 gUv = vMapUv * vec2(26.0, 16.0);
+         vec3 grain = texture2D(uGrain, gUv).rgb;
+         diffuseColor.rgb *= mix(vec3(1.0), grain, 0.48);
+        `,
+      );
+    };
+    mat.customProgramCacheKey = () => "sand-grain-tile";
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = true;
@@ -495,6 +511,60 @@ export class SandField {
     }
     return true;
   }
+}
+
+function makeGrainTile(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("grain tile");
+  ctx.fillStyle = "#f2efe8";
+  ctx.fillRect(0, 0, size, size);
+  const rng = mulberry32(0xc0ffee);
+  const img = ctx.getImageData(0, 0, size, size);
+  const data = img.data;
+  for (let i = 0; i < 14000; i++) {
+    const x = (rng() * size) | 0;
+    const y = (rng() * size) | 0;
+    const idx = (y * size + x) * 4;
+    const light = rng() > 0.5;
+    const a = 0.22 + rng() * 0.4;
+    const src = light ? [255, 253, 246] : [70, 68, 64];
+    data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
+    data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
+    data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
+  }
+  for (let i = 0; i < 900; i++) {
+    const x = (rng() * size) | 0;
+    const y = (rng() * size) | 0;
+    const w = 1 + ((rng() * 3) | 0);
+    const h = 1 + ((rng() * 2) | 0);
+    const light = rng() > 0.5;
+    const src = light ? [252, 250, 244] : [82, 80, 74];
+    for (let yy = 0; yy < h; yy++) {
+      for (let xx = 0; xx < w; xx++) {
+        const px = (x + xx) % size;
+        const py = (y + yy) % size;
+        const idx = (py * size + px) * 4;
+        const a = 0.28 + rng() * 0.35;
+        data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
+        data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
+        data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.anisotropy = 16;
+  return tex;
 }
 
 function clampByte(v: number): number {
