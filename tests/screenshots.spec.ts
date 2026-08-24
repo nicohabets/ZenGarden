@@ -37,13 +37,13 @@ test.describe("screenshots", () => {
     await page.waitForTimeout(400);
 
     await page.evaluate(() => {
-      // Same grazing close-up, but on packed court — the island at the
-      // end of this rake was the black void with a dotted grit rim.
+      // Grazing close-up on the same clear rake stretch as mobile-close.
+      // Island-1 sits on z=1.88 around x=-0.4; this target stays west of it.
       window.__ZEN_GARDEN__!.setCamera({
         azimuth: 1.52,
         elevation: 0.182,
         zoom: 0.38,
-        tx: -1.85,
+        tx: -2.8,
         tz: 1.88,
       });
     });

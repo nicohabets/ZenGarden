@@ -140,18 +140,18 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
     v.z *= 0.9 + 0.08 * Math.cos(seed * 0.4 + v.x * 1.6);
     v.y = v.y * 0.38 + 0.2;
     if (v.y < 0.04) v.y = 0.04 + rng() * 0.03;
-    // Body stays inside the keep-out. The dropped skirt flares a little
-    // past it so the last grit row sits under moss, not as a pale ring.
-    const skirt = n.y < 0.22;
-    const limX = skirt ? 1.14 : 1.05;
-    const limZ = skirt ? 1.12 : 1.04;
-    const ex = v.x / limX;
-    const ez = v.z / limZ;
-    const e = ex * ex + ez * ez;
-    if (e > 1) {
-      const shrink = 1 / Math.sqrt(e);
-      v.x *= shrink;
-      v.z *= shrink;
+    // Equator fills the keep-out ellipse so HUD never shows a beige
+    // shoreline. Skirt flares a little and drops through the grit.
+    const skirt = n.y < 0.25;
+    const ring = n.y < 0.72;
+    const nxz = Math.hypot(v.x / 1.05, v.z / 1.04) || 1;
+    if (ring) {
+      const target = skirt ? 1.08 : 1.0;
+      v.x = (v.x / nxz) * target;
+      v.z = (v.z / nxz) * target;
+    } else if (nxz > 1) {
+      v.x /= nxz;
+      v.z /= nxz;
     }
     if (skirt) {
       v.y = -0.18 + rng() * 0.04;
@@ -221,6 +221,17 @@ export function createMoss(states: MossState[]): THREE.Group {
     moss.castShadow = false;
     moss.userData.kind = "moss";
     island.add(moss);
+
+    // Unlit green wall under the skirt. A lit cap was the white
+    // shoreline; a dark disc was the close-up void. No top face.
+    const wall = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1.04, 0.2, 28, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x4e6a38 }),
+    );
+    wall.scale.set(s.scale * MOSS_FOOT.x, 1, s.scale * MOSS_FOOT.z);
+    wall.position.y = -0.02;
+    wall.userData.kind = "moss";
+    island.add(wall);
 
     const pillows = 2 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {
