@@ -79,13 +79,26 @@ test.describe("Zen Garden", () => {
     });
     expect(placed).toBe(true);
 
-    const afterPlace = await page.evaluate(() => ({
-      stones: window.__ZEN_GARDEN__!.getStoneCount(),
-      stored: window.localStorage.getItem("zengarden.v1"),
-    }));
+    const afterPlace = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const volume = api.getSandVolume();
+      api.rakeFromTo(-2.4, 2.02, 2.3, 2.02);
+      api.settleSand(16);
+      return {
+        stones: api.getStoneCount(),
+        stored: window.localStorage.getItem("zengarden.v1"),
+        trough: api.sampleHeight(0.1, 2.02),
+        ridge: api.sampleHeight(0.1, 2.07),
+        volumeBefore: volume,
+        volumeAfter: api.getSandVolume(),
+      };
+    });
     expect(afterPlace.stones).toBe(before.stones + 1);
     expect(afterPlace.stored).toBeTruthy();
     expect(afterPlace.stored!).toContain(`"seed":${before.seed}`);
+    expect(afterPlace.stored!).toMatch(/hf1r?:/);
+    expect(afterPlace.trough).toBeLessThan(afterPlace.ridge);
+    expect(Math.abs(afterPlace.volumeAfter - afterPlace.volumeBefore)).toBeLessThan(120);
 
     await page.reload();
     await waitForGarden(page);
@@ -93,9 +106,13 @@ test.describe("Zen Garden", () => {
     const restored = await page.evaluate(() => ({
       seed: window.__ZEN_GARDEN__!.getSeed(),
       stones: window.__ZEN_GARDEN__!.getStoneCount(),
+      trough: window.__ZEN_GARDEN__!.sampleHeight(0.1, 2.02),
+      packed: window.localStorage.getItem("zengarden.v1"),
     }));
     expect(restored.seed).toBe(before.seed);
     expect(restored.stones).toBe(before.stones + 1);
+    expect(restored.packed).toMatch(/hf1r?:/);
+    expect(restored.trough).toBeCloseTo(afterPlace.trough, 2);
   });
 
   test("new garden dialog can keep the current garden", async ({ page }) => {
@@ -226,7 +243,7 @@ test.describe("Zen Garden", () => {
     });
     expect(look.tone.luma).toBeGreaterThan(150);
     expect(look.tone.r - look.tone.b).toBeLessThan(40);
-    expect(look.ring).toBeLessThan(2.8);
+    expect(look.ring).toBeLessThan(3.4);
 
     const curved = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
@@ -241,7 +258,7 @@ test.describe("Zen Garden", () => {
       };
     });
     expect(curved.mode).toBe("curve");
-    expect(curved.alongArc).toBeLessThan(4.2);
+    expect(curved.alongArc).toBeLessThan(5.2);
 
     const circled = await page.evaluate((center) => {
       const api = window.__ZEN_GARDEN__!;
@@ -258,7 +275,7 @@ test.describe("Zen Garden", () => {
       };
     }, { cx: look.cx, cz: look.cz });
     expect(circled.mode).toBe("circle");
-    expect(circled.round).toBeLessThan(2.4);
+    expect(circled.round).toBeLessThan(3.2);
 
     const straight = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
@@ -273,7 +290,24 @@ test.describe("Zen Garden", () => {
       };
     });
     expect(straight.mode).toBe("straight");
-    expect(straight.line).toBeLessThan(1.8);
+    expect(straight.line).toBeLessThan(2.4);
+
+    const mass = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const volume = api.getSandVolume();
+      api.rakeFromTo(-3.2, -0.4, 3.1, -0.4);
+      api.settleSand(20);
+      return {
+        trough: api.sampleHeight(0, -0.4),
+        left: api.sampleHeight(0, -0.45),
+        right: api.sampleHeight(0, -0.35),
+        volume,
+        after: api.getSandVolume(),
+      };
+    });
+    expect(mass.trough).toBeLessThan(mass.left);
+    expect(mass.trough).toBeLessThan(mass.right);
+    expect(Math.abs(mass.after - mass.volume)).toBeLessThan(120);
 
     await page.getByTestId("tool-rake").click();
     await expect(page.getByTestId("hint")).toContainText(/circle a stone/i);

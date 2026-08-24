@@ -134,11 +134,11 @@ export function createStoneGeometry(variant: number): THREE.BufferGeometry {
 
   const shape = shapeOf(variant);
   let geo: THREE.BufferGeometry;
-  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 6, 3, 5), variant, 0.94, 0.07);
-  else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 1), variant, 1.42, 0.06);
-  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 18, 14), variant, 0.56, 0.045);
-  else if (shape === "angular") geo = deform(new THREE.DodecahedronGeometry(0.74, 1), variant, 0.8, 0.09);
-  else geo = deform(new THREE.IcosahedronGeometry(0.9, 2), variant, variant % 3 === 0 ? 0.62 : 0.78, 0.07);
+  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 10, 5, 8), variant, 0.94, 0.055);
+  else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 2), variant, 1.42, 0.045);
+  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 28, 20), variant, 0.56, 0.035);
+  else if (shape === "angular") geo = deform(new THREE.DodecahedronGeometry(0.74, 2), variant, 0.8, 0.07);
+  else geo = deform(new THREE.IcosahedronGeometry(0.9, 3), variant, variant % 3 === 0 ? 0.62 : 0.78, 0.05);
 
   geo.userData.shared = true;
   geoCache.set(variant, geo);
@@ -209,12 +209,10 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
     map: tex,
     bumpMap: tex,
     bumpScale: litho === "granite" ? 0.12 : 0.16,
-    displacementMap: tex,
-    displacementScale: litho === "granite" ? 0.028 : 0.022,
     roughness: litho === "granite" ? 0.86 : 0.93,
     metalness: litho === "granite" ? 0.04 : 0.02,
     vertexColors: true,
-    flatShading: shape === "angular",
+    flatShading: false,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
@@ -228,7 +226,7 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
   return mesh;
 }
 
-export function applyStoneTransform(mesh: THREE.Mesh, state: StoneState): void {
+export function applyStoneTransform(mesh: THREE.Mesh, state: StoneState, sandHeight = 0): void {
   const shape = shapeOf(state.variant);
   const h =
     shape === "standing"
@@ -236,7 +234,8 @@ export function applyStoneTransform(mesh: THREE.Mesh, state: StoneState): void {
       : shape === "slab"
         ? 0.13 + state.scale * 0.09
         : 0.2 + state.scale * 0.2;
-  mesh.position.set(state.x, GARDEN.sandY + h * 0.28, state.z);
+  const embed = shape === "standing" ? 0.1 : shape === "slab" ? 0.055 : 0.085;
+  mesh.position.set(state.x, GARDEN.sandY + sandHeight + h * 0.18 - embed, state.z);
   const tiltX = state.tiltX ?? (shape === "slab" ? 0.03 : 0.06);
   const tiltZ = state.tiltZ ?? 0.02;
   mesh.rotation.set(tiltX, state.rotY, tiltZ);
@@ -263,13 +262,20 @@ export class StoneField {
     return mesh;
   }
 
-  move(id: string, x: number, z: number): void {
+  move(id: string, x: number, z: number, sandHeight = 0): void {
     const state = this.stones.find((s) => s.id === id);
     const mesh = this.meshes.get(id);
     if (!state || !mesh) return;
     state.x = x;
     state.z = z;
-    applyStoneTransform(mesh, state);
+    applyStoneTransform(mesh, state, sandHeight);
+  }
+
+  settleToSand(sample: (x: number, z: number) => number): void {
+    for (const state of this.stones) {
+      const mesh = this.meshes.get(state.id);
+      if (mesh) applyStoneTransform(mesh, state, sample(state.x, state.z));
+    }
   }
 
   get(id: string): StoneState | undefined {

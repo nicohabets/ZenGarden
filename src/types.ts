@@ -115,6 +115,9 @@ export interface ZenGardenAPI {
   rakeStroke(points: Array<[number, number]>): RakeMode;
   sampleGrooveDeviation(x1: number, z1: number, x2: number, z2: number): number;
   sampleArcDeviation(cx: number, cz: number, radius: number, a0?: number, a1?: number): number;
+  sampleHeight(x: number, z: number): number;
+  getSandVolume(): number;
+  settleSand(steps?: number): void;
   getSandTone(): SandTone;
   getMossCount(): number;
   getCamera(): CameraState;

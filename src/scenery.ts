@@ -68,72 +68,112 @@ export function createFrame(): THREE.Group {
 }
 
 function islandGeometry(seed: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 24, 16);
+  const geo = new THREE.SphereGeometry(1, 40, 28);
   const rng = mulberry32(seed);
   const pos = geo.attributes.position;
+  const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
   const v = new THREE.Vector3();
+  const earth = new THREE.Color(0x5c4e3a);
+  const moss = new THREE.Color(0x3f4c34);
+  const mossLite = new THREE.Color(0x536246);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const n = v.clone().normalize();
     const wobble =
-      0.16 * Math.sin(v.x * 3.1 + seed) +
-      0.11 * Math.cos(v.z * 4.2 + seed * 0.7) +
-      0.05 * (rng() - 0.5);
+      0.22 * Math.sin(v.x * 2.4 + seed) +
+      0.16 * Math.cos(v.z * 3.1 + seed * 0.7) +
+      0.1 * Math.sin(v.x * 5.6 + v.z * 4.8 + seed) +
+      0.07 * (rng() - 0.5);
     v.addScaledVector(n, wobble);
-    v.y *= 0.22;
-    if (v.y < 0) v.y *= 0.25;
+    v.x *= 1.05 + 0.08 * Math.sin(seed + v.z * 2.0);
+    v.z *= 0.88 + 0.1 * Math.cos(seed * 0.4 + v.x * 1.6);
+    v.y = v.y * 0.42 + 0.18;
+    if (v.y < 0.02) v.y = 0.02 * rng();
     pos.setXYZ(i, v.x, v.y, v.z);
+    const c = v.y < 0.12 ? earth.clone().lerp(moss, 0.25) : moss.clone().lerp(mossLite, rng() * 0.45);
+    color.setXYZ(i, c.r, c.g, c.b);
   }
+  geo.setAttribute("color", color);
   geo.computeVertexNormals();
   return geo;
 }
 
+function mossTexture(): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("moss texture");
+  ctx.fillStyle = "#445238";
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 2200; i++) {
+    const x = (i * 29 + 3) % size;
+    const y = (i * 47 + 11) % size;
+    ctx.fillStyle = i % 5 === 0 ? "#2e3a28" : i % 3 === 0 ? "#5a6848" : "#3c4a32";
+    ctx.fillRect(x, y, 1 + (i % 2), 1);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2.2, 2.2);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+let mossMap: THREE.CanvasTexture | null = null;
+
 export function createMoss(states: MossState[]): THREE.Group {
   const group = new THREE.Group();
-  const mossColors = [0x3a4632, 0x445238, 0x384632];
+  mossMap ??= mossTexture();
   const earth = new THREE.MeshStandardMaterial({
-    color: 0x5a4e3c,
+    color: 0x5a4c3a,
     roughness: 0.98,
     metalness: 0,
+  });
+  const mossMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: mossMap,
+    roughness: 0.98,
+    metalness: 0,
+    vertexColors: true,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
     const rng = mulberry32(seed);
     const island = new THREE.Group();
-    island.position.set(s.x, GARDEN.sandY + 0.012, s.z);
+    island.position.set(s.x, GARDEN.sandY - 0.02, s.z);
     island.rotation.y = s.rotY;
     island.userData.kind = "moss";
 
     const soil = new THREE.Mesh(islandGeometry(seed ^ 0x51), earth);
-    soil.scale.set(s.scale * 0.58, s.scale * 0.09, s.scale * 0.5);
+    soil.scale.set(s.scale * 0.62, s.scale * 0.16, s.scale * 0.54);
+    soil.position.y = -0.01;
     soil.receiveShadow = true;
+    soil.castShadow = true;
     soil.userData.kind = "moss";
     island.add(soil);
 
-    const moss = new THREE.Mesh(
-      islandGeometry(seed),
-      new THREE.MeshStandardMaterial({
-        color: mossColors[seed % mossColors.length],
-        roughness: 0.99,
-        metalness: 0,
-      }),
-    );
-    moss.scale.set(s.scale * 0.52, s.scale * 0.12, s.scale * 0.44);
-    moss.position.y = 0.02;
+    const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
+    moss.scale.set(s.scale * 0.55, s.scale * 0.22, s.scale * 0.48);
+    moss.position.y = 0.01;
     moss.receiveShadow = true;
+    moss.castShadow = true;
     moss.userData.kind = "moss";
     island.add(moss);
 
-    if (rng() > 0.35) {
-      const bump = new THREE.Mesh(
-        islandGeometry(seed ^ 17),
-        new THREE.MeshStandardMaterial({
-          color: 0x4a5440,
-          roughness: 0.99,
-        }),
+    const pillows = 2 + ((seed >> 3) % 3);
+    for (let p = 0; p < pillows; p++) {
+      const bump = new THREE.Mesh(islandGeometry(seed ^ (17 + p * 13)), mossMat);
+      bump.scale.set(s.scale * randRange(rng, 0.16, 0.28), s.scale * randRange(rng, 0.08, 0.14), s.scale * randRange(rng, 0.14, 0.24));
+      bump.position.set(
+        randRange(rng, -0.28, 0.28) * s.scale,
+        0.03,
+        randRange(rng, -0.22, 0.22) * s.scale,
       );
-      bump.scale.set(s.scale * 0.22, s.scale * 0.07, s.scale * 0.2);
-      bump.position.set(randRange(rng, -0.18, 0.18) * s.scale, 0.03, randRange(rng, -0.14, 0.14) * s.scale);
+      bump.rotation.y = rng() * Math.PI;
+      bump.receiveShadow = true;
       bump.userData.kind = "moss";
       island.add(bump);
     }

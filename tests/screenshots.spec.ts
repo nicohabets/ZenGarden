@@ -31,9 +31,10 @@ test.describe("screenshots", () => {
       }
       api.rakeStroke(ring);
       api.rakeFromTo(-5.1, 1.88, 4.6, 1.88);
+      api.settleSand(36);
       return { cx, cz };
     });
-    await page.waitForTimeout(1600);
+    await page.waitForTimeout(800);
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
