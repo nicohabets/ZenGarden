@@ -57,7 +57,7 @@ export class RakeGuide {
   feed(x: number, z: number, islands: RakeIsland[]): RakePiece | null {
     const raw = { x, z };
     this.samples.push(raw);
-    if (this.mode === "pending" && this.pathLength() >= 0.3) {
+    if (this.mode === "pending" || this.mode === "curve") {
       this.classify(islands);
     }
     if (this.mode === "circle") return this.emitCircle(raw);
@@ -68,7 +68,7 @@ export class RakeGuide {
   private classify(islands: RakeIsland[]): void {
     const circle = this.bestCircle(islands);
     const straight = this.straightness();
-    if (circle && circle.score > 0.58 && circle.score >= straight - 0.04) {
+    if (circle && circle.score > 0.58) {
       this.mode = "circle";
       this.island = circle.island;
       this.radius = snapRingRadius(circle.radius, circle.island.innerR);
@@ -80,12 +80,13 @@ export class RakeGuide {
       };
       return;
     }
-    if (straight > 0.7) {
+    const path = this.pathLength();
+    if (path >= 0.85 && straight > 0.78) {
       this.mode = "straight";
       this.lockStraight();
       return;
     }
-    this.mode = "curve";
+    if (path >= 0.5) this.mode = "curve";
   }
 
   private bestCircle(islands: RakeIsland[]): { island: RakeIsland; radius: number; score: number } | null {

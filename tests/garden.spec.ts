@@ -213,11 +213,15 @@ test.describe("Zen Garden", () => {
       const group = (save?.stones ?? []).filter((s) => s.cluster === 0);
       const cx = group.reduce((s, t) => s + t.x, 0) / group.length;
       const cz = group.reduce((s, t) => s + t.z, 0) / group.length;
+      const moss = (save?.moss ?? []).find((m) => Math.hypot(m.x - cx, m.z - cz) < 0.85);
+      const innerR = (moss?.scale ?? 1) * 0.48;
+      const ringR = innerR + 0.165 * 2;
       return {
         tone: api.getSandTone(),
-        ring: api.sampleArcDeviation(cx, cz, 1.15),
+        ring: api.sampleArcDeviation(cx, cz, ringR),
         cx,
         cz,
+        ringR,
       };
     });
     expect(look.tone.luma).toBeGreaterThan(150);
@@ -233,11 +237,11 @@ test.describe("Zen Garden", () => {
       }
       return {
         mode: api.rakeStroke(pts),
-        chord: api.sampleGrooveDeviation(-1.7 + Math.cos(Math.PI * 0.12) * 1.4, 2.32, -1.7 + Math.cos(Math.PI * 0.97) * 1.4, 2.32),
+        alongArc: api.sampleArcDeviation(-1.7, 2.32, 1.4, Math.PI * 0.12, Math.PI * 0.97),
       };
     });
     expect(curved.mode).toBe("curve");
-    expect(curved.chord).toBeGreaterThan(2.2);
+    expect(curved.alongArc).toBeLessThan(3.5);
 
     const circled = await page.evaluate((center) => {
       const api = window.__ZEN_GARDEN__!;

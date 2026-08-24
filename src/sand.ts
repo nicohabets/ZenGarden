@@ -257,6 +257,7 @@ export class SandField {
     const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
     const steps = 36;
     const radii: number[] = [];
+    let prev = 0;
     for (let i = 0; i <= steps; i++) {
       const a = a0 + ((a1 - a0) * i) / steps;
       const px = cx + Math.cos(a) * radius;
@@ -266,9 +267,11 @@ export class SandField {
       const nx = uv.u - inward.u;
       const ny = uv.v - inward.v;
       const nlen = Math.hypot(nx, ny) || 1;
-      let best = 0;
+      let best = prev;
       let bestDark = 999;
-      for (let o = -10; o <= 10; o++) {
+      const lo = i === 0 ? -8 : prev - 3;
+      const hi = i === 0 ? 8 : prev + 3;
+      for (let o = lo; o <= hi; o++) {
         const x = Math.round(uv.u + (nx / nlen) * o);
         const y = Math.round(uv.v + (ny / nlen) * o);
         if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
@@ -279,6 +282,7 @@ export class SandField {
           best = o;
         }
       }
+      prev = best;
       radii.push(best);
     }
     const mean = radii.reduce((s, v) => s + v, 0) / radii.length;
