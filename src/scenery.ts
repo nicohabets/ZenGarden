@@ -125,8 +125,8 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
   const v = new THREE.Vector3();
-  const moss = new THREE.Color(0x4a6834);
-  const mossLite = new THREE.Color(0x6a8648);
+  const moss = new THREE.Color(0x5a7840);
+  const mossLite = new THREE.Color(0x7a9a54);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const n = v.clone().normalize();
@@ -185,8 +185,8 @@ export function createMoss(states: MossState[]): THREE.Group {
     roughness: 0.96,
     metalness: 0,
     envMapIntensity: 0,
-    emissive: 0x182410,
-    emissiveIntensity: 0.22,
+    emissive: 0x243318,
+    emissiveIntensity: 0.3,
     vertexColors: true,
     side: THREE.FrontSide,
     depthWrite: true,
@@ -200,7 +200,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     island.userData.kind = "moss";
 
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
-    moss.scale.set(s.scale * MOSS_FOOT.x, s.scale * 0.36, s.scale * MOSS_FOOT.z);
+    moss.scale.set(s.scale * MOSS_FOOT.x * 1.04, s.scale * 0.38, s.scale * MOSS_FOOT.z * 1.04);
     moss.position.y = 0.04;
     moss.receiveShadow = true;
     moss.castShadow = false;

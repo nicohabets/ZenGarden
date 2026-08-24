@@ -83,16 +83,16 @@ export class GrainCloud {
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
     const hq = wantHighQuality();
-    const carpetCap = Math.floor(this.maxCount * (hud ? 0.86 : 0.9));
-    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * (hud ? 0.55 : 0.82))));
+    const carpetCap = Math.floor(this.maxCount * 0.9);
+    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.82)));
     const px = Math.max(1, viewH);
-    const targetPx = close ? 7 : hud ? 18 : 11;
+    const targetPx = close ? 7 : hud ? 16 : 11;
     const screenWorld = (targetPx * cam.zoom) / px;
-    const pack = close ? 1.78 : hud ? 1.22 : 1.5;
+    const pack = close ? 1.78 : hud ? 1.65 : 1.6;
     const worldSize = Math.max(spacing * pack, screenWorld);
 
     let n = 0;
-    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * (hud ? 0.62 : 0.68)), 0, 0.2);
+    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2);
     n = this.plantCarpet(
       n,
       x0 + spacing * 0.5,
@@ -106,21 +106,19 @@ export class GrainCloud {
       0,
       0.16,
     );
-    if (!hud) {
-      n = this.plantCarpet(
-        n,
-        x0 + spacing * 0.25,
-        z0 + spacing * 0.58,
-        x1,
-        z1,
-        spacing * 0.92,
-        sand,
-        blockers,
-        Math.floor(this.maxCount * 0.95),
-        0,
-        0.18,
-      );
-    }
+    n = this.plantCarpet(
+      n,
+      x0 + spacing * 0.25,
+      z0 + spacing * 0.58,
+      x1,
+      z1,
+      spacing * 0.92,
+      sand,
+      blockers,
+      Math.floor(this.maxCount * 0.95),
+      0,
+      0.18,
+    );
 
     const pathStep = hq ? Math.max(spacing * 0.45, 0.0024) : Math.max(spacing * 0.85, 0.014);
     const troughCap = Math.floor(this.maxCount * 0.985);
@@ -186,7 +184,9 @@ export class GrainCloud {
 
   private writeInstances(worldSize: number, blockers: Blocker[]): void {
     const n = this.count;
-    const hide = worldSize * 0.4;
+    // Only hide grain *centers* that landed on moss. A body-pad here
+    // opened a beige shoreline of scene background.
+    const hide = 0;
     for (let i = 0; i < n; i++) {
       const seed = this.seeds[i];
       const h = this.hs[i];
