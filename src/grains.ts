@@ -154,7 +154,7 @@ export class GrainCloud {
 
 function makeGritGeometry(): THREE.BufferGeometry {
   const geo = new THREE.SphereGeometry(0.5, 4, 3);
-  geo.scale(1.12, 0.3, 0.86);
+  geo.scale(1.05, 0.22, 0.8);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
