@@ -42,8 +42,11 @@ export class GrainCloud {
     this.layers = new Float32Array(this.maxCount);
 
     const geo = makeGritGeometry();
-    const mat = new THREE.MeshLambertMaterial({
-      color: 0xc4b8a4,
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.94,
+      metalness: 0,
+      envMapIntensity: 0,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
     this.mesh.frustumCulled = false;
@@ -76,9 +79,12 @@ export class GrainCloud {
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
     const hq = wantHighQuality();
-    const cellBudget = Math.floor(this.maxCount * (hq ? 0.8 : 0.74));
+    const close = cam.zoom < 1.15;
+    const cellBudget = Math.floor(this.maxCount * (close ? (hq ? 0.82 : 0.76) : 0.64));
     const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
-    const worldSize = Math.min(spacing * 1.18, hq ? 0.0042 : 0.0076);
+    const worldSize = close
+      ? Math.min(spacing * 1.16, hq ? 0.0035 : 0.0064)
+      : Math.min(spacing * 0.48, hq ? 0.01 : 0.012);
 
     let n = 0;
     let row = 0;
@@ -211,8 +217,8 @@ export class GrainCloud {
       _dummy.scale.set(s * (0.78 + seed * 0.36), s * (0.4 + seed * 0.22), s * (0.62 + hash2(i, 9) * 0.4));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const lift = THREE.MathUtils.clamp(layer * 0.012, 0, 0.045);
-      _color.setRGB(0.72 + seed * 0.08 + lift, 0.68 + seed * 0.06 + lift * 0.55, 0.6 + seed * 0.05 + lift * 0.3);
+      const lift = THREE.MathUtils.clamp(layer * 0.016, 0, 0.06);
+      _color.setRGB(0.8 + seed * 0.08 + lift, 0.76 + seed * 0.06 + lift * 0.5, 0.68 + seed * 0.05 + lift * 0.28);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
