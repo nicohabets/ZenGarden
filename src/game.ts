@@ -119,7 +119,7 @@ export class ZenGarden {
     this.scene.add(createFrame());
     this.scene.add(createBackdrop());
     this.scene.add(this.sand.mesh);
-    this.scene.add(this.grains.points);
+    this.scene.add(this.grains.mesh);
     this.scene.add(this.stones.group);
 
     this.bindUi();

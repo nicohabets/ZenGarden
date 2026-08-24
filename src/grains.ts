@@ -6,55 +6,51 @@ import { GARDEN, type Blocker } from "./types";
 
 /** Visible grit sitting on the mass field. Budget keeps a 60fps mobile path. */
 export function grainBudget(): number {
-  if (wantHighQuality()) return 280_000;
-  if (isMobileGarden()) return 86_000;
-  return 176_000;
+  if (wantHighQuality()) return 220_000;
+  if (isMobileGarden()) return 64_000;
+  return 140_000;
 }
 
+const _dummy = new THREE.Object3D();
+const _color = new THREE.Color();
+
 /**
- * Packed millimetre grit as point sprites. The height field is mass only;
- * these grains are the sand you see. Coverage follows the slanted ground
- * patch so a low close-up does not flash the bed at the far edge.
+ * Packed millimetre grit as instanced nuggets. Point sprites vanish to
+ * speckle under SwiftShader; these are real meshes that ride the mass field.
  */
 export class GrainCloud {
-  readonly points: THREE.Points;
-  private readonly positions: Float32Array;
-  private readonly seeds: Float32Array;
-  private readonly layers: Float32Array;
-  private readonly geometry: THREE.BufferGeometry;
-  private readonly material: THREE.ShaderMaterial;
+  readonly mesh: THREE.InstancedMesh;
   private readonly maxCount: number;
   private count = 0;
   private lastKey = "";
   private lastHeightAt = 0;
+  private readonly xs: Float32Array;
+  private readonly zs: Float32Array;
+  private readonly seeds: Float32Array;
+  private readonly layers: Float32Array;
 
   constructor() {
     this.maxCount = grainBudget();
-    this.positions = new Float32Array(this.maxCount * 3);
+    this.xs = new Float32Array(this.maxCount);
+    this.zs = new Float32Array(this.maxCount);
     this.seeds = new Float32Array(this.maxCount);
     this.layers = new Float32Array(this.maxCount);
-    this.geometry = new THREE.BufferGeometry();
-    this.geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3));
-    this.geometry.setAttribute("aSeed", new THREE.BufferAttribute(this.seeds, 1));
-    this.geometry.setAttribute("aLayer", new THREE.BufferAttribute(this.layers, 1));
-    this.geometry.setDrawRange(0, 0);
 
-    this.material = new THREE.ShaderMaterial({
-      uniforms: {
-        uPointPx: { value: 4 },
-      },
-      vertexShader: GRAIN_VERT,
-      fragmentShader: GRAIN_FRAG,
-      depthTest: true,
-      depthWrite: true,
-      transparent: false,
-      toneMapped: true,
+    const geo = makeGritGeometry();
+    const mat = new THREE.MeshStandardMaterial({
+      roughness: 0.98,
+      metalness: 0,
+      envMapIntensity: 0,
+      vertexColors: false,
     });
-
-    this.points = new THREE.Points(this.geometry, this.material);
-    this.points.frustumCulled = false;
-    this.points.matrixAutoUpdate = false;
-    this.points.userData.kind = "sand-grains";
+    this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
+    this.mesh.frustumCulled = false;
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.maxCount * 3), 3);
+    this.mesh.count = 0;
+    this.mesh.castShadow = false;
+    this.mesh.receiveShadow = false;
+    this.mesh.userData.kind = "sand-grains";
   }
 
   getCount(): number {
@@ -65,18 +61,18 @@ export class GrainCloud {
     const key = `${cam.zoom.toFixed(3)}:${cam.target.x.toFixed(2)}:${cam.target.z.toFixed(2)}:${cam.azimuth.toFixed(2)}:${cam.elevation.toFixed(2)}:${cam.aspect.toFixed(2)}:${viewH | 0}:${blockers.length}`;
     if (force || key !== this.lastKey) {
       this.lastKey = key;
-      this.layout(cam, sand, blockers, viewH);
+      this.layout(cam, sand, blockers);
       this.lastHeightAt = performance.now();
       return;
     }
     const now = performance.now();
     if (now - this.lastHeightAt > 140) {
-      this.lift(sand);
+      this.lift(sand, cam);
       this.lastHeightAt = now;
     }
   }
 
-  private layout(cam: CameraRig, sand: SandField, blockers: Blocker[], viewH: number): void {
+  private layout(cam: CameraRig, sand: SandField, blockers: Blocker[]): void {
     const bounds = slantBounds(cam);
     const x0 = Math.max(-GARDEN.width / 2 + 0.03, bounds.x0);
     const x1 = Math.min(GARDEN.width / 2 - 0.03, bounds.x1);
@@ -84,17 +80,12 @@ export class GrainCloud {
     const z1 = Math.min(GARDEN.depth / 2 - 0.03, bounds.z1);
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
-    const surfaceBudget = Math.floor(this.maxCount * 0.8);
-    const spacing = Math.max(0.00135, Math.sqrt((spanX * spanZ) / Math.max(8, surfaceBudget)));
-    const worldSize = spacing * 1.72;
-    const pixel = (worldSize * viewH) / Math.max(0.2, cam.zoom);
-    this.material.uniforms.uPointPx.value = THREE.MathUtils.clamp(pixel, 2.6, 8.8);
+    const surfaceBudget = Math.floor(this.maxCount * 0.82);
+    const spacing = Math.max(0.0014, Math.sqrt((spanX * spanZ) / Math.max(8, surfaceBudget)));
+    const worldSize = spacing * 1.55;
 
     const hex = spacing * 0.86602540378;
     let n = 0;
-    const pos = this.positions;
-    const seeds = this.seeds;
-    const layers = this.layers;
     let row = 0;
     for (let z = z0; z <= z1 && n < surfaceBudget; z += hex, row++) {
       const xShift = row & 1 ? spacing * 0.5 : 0;
@@ -102,63 +93,81 @@ export class GrainCloud {
         const col = ((x - x0) / spacing) | 0;
         const jx = hash2(row * 13 + 3, col) - 0.5;
         const jz = hash2(row * 29 + 7, col + 11) - 0.5;
-        const gx = x + jx * spacing * 0.34;
-        const gz = z + jz * spacing * 0.34;
+        const gx = x + jx * spacing * 0.32;
+        const gz = z + jz * spacing * 0.32;
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
-        const seed = hash2(row * 17 + 4, n * 3 + 9);
-        const h = sand.sampleHeight(gx, gz);
-        pos[n * 3] = gx;
-        pos[n * 3 + 1] = liftY(h, seed, 0);
-        pos[n * 3 + 2] = gz;
-        seeds[n] = seed;
-        layers[n] = 0;
+        this.xs[n] = gx;
+        this.zs[n] = gz;
+        this.seeds[n] = hash2(row * 17 + 4, n * 3 + 9);
+        this.layers[n] = 0;
         n += 1;
       }
     }
 
     const surface = n;
-    const pileBudget = Math.min(this.maxCount - n, Math.floor(this.maxCount * 0.2));
+    const pileBudget = Math.min(this.maxCount - n, Math.floor(this.maxCount * 0.18));
     const step = Math.max(1, Math.floor(surface / Math.max(1, pileBudget)));
     for (let i = 0; i < surface && n < this.maxCount && n - surface < pileBudget; i += step) {
-      const gx = pos[i * 3];
-      const gz = pos[i * 3 + 2];
-      const h = sand.sampleHeight(gx, gz);
+      const h = sand.sampleHeight(this.xs[i], this.zs[i]);
       if (h < 0.006) continue;
-      const seed = hash2(i + 19, 23);
-      const ox = gx + (seeds[i] - 0.5) * spacing * 0.28;
-      const oz = gz + (hash2(i + 5, 41) - 0.5) * spacing * 0.28;
-      pos[n * 3] = ox;
-      pos[n * 3 + 1] = liftY(h, seed, 1);
-      pos[n * 3 + 2] = oz;
-      seeds[n] = seed;
-      layers[n] = 1;
+      this.xs[n] = this.xs[i] + (this.seeds[i] - 0.5) * spacing * 0.26;
+      this.zs[n] = this.zs[i] + (hash2(i + 5, 41) - 0.5) * spacing * 0.26;
+      this.seeds[n] = hash2(i + 19, 23);
+      this.layers[n] = 1;
       n += 1;
     }
 
     this.count = n;
-    (this.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
-    (this.geometry.getAttribute("aSeed") as THREE.BufferAttribute).needsUpdate = true;
-    (this.geometry.getAttribute("aLayer") as THREE.BufferAttribute).needsUpdate = true;
-    this.geometry.setDrawRange(0, n);
-    this.geometry.computeBoundingSphere();
+    this.mesh.count = n;
+    this.writeInstances(sand, worldSize);
   }
 
-  private lift(sand: SandField): void {
-    const pos = this.positions;
-    const seeds = this.seeds;
-    const layers = this.layers;
+  private lift(sand: SandField, cam: CameraRig): void {
+    const bounds = slantBounds(cam);
+    const spanX = Math.max(0.1, bounds.x1 - bounds.x0);
+    const spanZ = Math.max(0.1, bounds.z1 - bounds.z0);
+    const spacing = Math.max(0.0014, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.82))));
+    this.writeInstances(sand, spacing * 1.55);
+  }
+
+  private writeInstances(sand: SandField, worldSize: number): void {
     const n = this.count;
     for (let i = 0; i < n; i++) {
-      const h = sand.sampleHeight(pos[i * 3], pos[i * 3 + 2]);
-      pos[i * 3 + 1] = liftY(h, seeds[i], layers[i]);
+      const seed = this.seeds[i];
+      const h = sand.sampleHeight(this.xs[i], this.zs[i]);
+      const y = GARDEN.sandY + h * 0.92 + (seed - 0.5) * 0.002 + this.layers[i] * 0.0034;
+      const s = worldSize * (0.72 + seed * 0.5);
+      _dummy.position.set(this.xs[i], y, this.zs[i]);
+      _dummy.rotation.set(seed * 5.1, seed * 6.8, hash2(i + 3, 17) * 6.2);
+      _dummy.scale.set(s * (0.85 + seed * 0.3), s * (0.55 + seed * 0.25), s * (0.8 + hash2(i, 9) * 0.35));
+      _dummy.updateMatrix();
+      this.mesh.setMatrixAt(i, _dummy.matrix);
+      const crest = THREE.MathUtils.clamp(h * 8, -0.12, 0.16);
+      _color.setRGB(0.78 + seed * 0.12 + crest, 0.74 + seed * 0.1 + crest * 0.8, 0.66 + seed * 0.08 + crest * 0.5);
+      this.mesh.setColorAt(i, _color);
     }
-    (this.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 }
 
-function liftY(height: number, seed: number, layer: number): number {
-  return GARDEN.sandY + height * 0.92 + (seed - 0.5) * 0.0026 + layer * (0.0031 + seed * 0.0018);
+function makeGritGeometry(): THREE.BufferGeometry {
+  const geo = isMobileGarden() && !wantHighQuality()
+    ? new THREE.OctahedronGeometry(0.5, 0)
+    : new THREE.IcosahedronGeometry(0.5, 0);
+  geo.scale(1.05, 0.38, 0.82);
+  const pos = geo.getAttribute("position");
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const k = hash2((x * 17) | 0, (z * 13) | 0);
+    pos.setXYZ(i, x * (0.9 + k * 0.16), y * (0.85 + k * 0.2), z * (0.9 + (1 - k) * 0.14));
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
 }
 
 function slantBounds(cam: CameraRig): { x0: number; z0: number; x1: number; z1: number } {
@@ -203,42 +212,3 @@ function hash2(x: number, y: number): number {
   n = Math.imul(n ^ (n >>> 13), 1274126177);
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
-
-const GRAIN_VERT = /* glsl */ `
-  uniform float uPointPx;
-  attribute float aSeed;
-  attribute float aLayer;
-  varying float vSeed;
-  varying float vShade;
-
-  void main() {
-    vSeed = aSeed;
-    float crest = clamp((position.y - 0.02) * 9.0, -0.35, 0.45);
-    vShade = 0.80 + aSeed * 0.14 + crest * 0.22 + aLayer * 0.04;
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mv;
-    gl_PointSize = uPointPx * mix(0.84, 1.16, aSeed);
-  }
-`;
-
-const GRAIN_FRAG = /* glsl */ `
-  varying float vSeed;
-  varying float vShade;
-
-  void main() {
-    vec2 p = gl_PointCoord * 2.0 - 1.0;
-    float a = atan(p.y, p.x);
-    float wobble = 0.18 * sin(a * 2.0 + vSeed * 6.2831)
-      + 0.07 * sin(a * 5.0 + vSeed * 9.4)
-      + 0.04 * sin(a * 9.0 + vSeed * 2.2);
-    vec2 q = vec2(p.x * mix(0.92, 1.18, fract(vSeed * 5.1)), p.y * mix(0.88, 1.14, fract(vSeed * 8.7)));
-    float d = length(q);
-    if (d > 0.78 + wobble) discard;
-    float core = smoothstep(0.78 + wobble, 0.18, d);
-    vec3 pale = vec3(0.88, 0.84, 0.77);
-    vec3 midc = vec3(0.70, 0.67, 0.60);
-    vec3 col = mix(midc, pale, fract(vSeed * 17.3));
-    col *= vShade * (0.78 + 0.24 * core);
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
