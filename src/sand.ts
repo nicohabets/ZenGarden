@@ -165,11 +165,11 @@ export class SandField {
           "#include <color_fragment>",
           `#include <color_fragment>
           float g =
-            gritNoise(vGritPos.xz * 160.0) * 0.4 +
-            gritNoise(vGritPos.xz * 390.0) * 0.35 +
-            gritNoise(vGritPos.xz * 820.0) * 0.25;
-          vec3 lo = vec3(0.70, 0.66, 0.58);
-          vec3 hi = vec3(0.86, 0.82, 0.73);
+            gritNoise(vGritPos.xz * 140.0) * 0.35 +
+            gritNoise(vGritPos.xz * 340.0) * 0.4 +
+            gritNoise(vGritPos.xz * 780.0) * 0.25;
+          vec3 lo = vec3(0.54, 0.50, 0.42);
+          vec3 hi = vec3(0.93, 0.89, 0.78);
           diffuseColor.rgb = mix(lo, hi, g);`,
         );
     };

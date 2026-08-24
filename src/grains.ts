@@ -83,8 +83,8 @@ export class GrainCloud {
     const cellBudget = Math.floor(this.maxCount * (close ? (hq ? 0.82 : 0.76) : 0.64));
     const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
     const worldSize = close
-      ? Math.min(spacing * 1.16, hq ? 0.0035 : 0.0064)
-      : Math.min(spacing * 0.48, hq ? 0.01 : 0.012);
+      ? Math.min(spacing * 1.2, hq ? 0.004 : 0.0068)
+      : Math.min(spacing * 0.7, hq ? 0.014 : 0.016);
 
     let n = 0;
     let row = 0;
