@@ -73,12 +73,13 @@ test.describe("screenshots", () => {
     await page.screenshot({ path: `${outDir}/desktop-hud.png`, animations: "disabled" });
 
     await page.setViewportSize({ width: 390, height: 844 });
+    // Packed court on the long rake, clear of every moss island.
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.92,
-        elevation: 0.36,
-        zoom: 0.95,
-        tx: -0.35,
+        azimuth: 1.35,
+        elevation: 0.5,
+        zoom: 1.15,
+        tx: -2.45,
         tz: 1.88,
       });
     });

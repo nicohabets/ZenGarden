@@ -201,13 +201,10 @@ export function createMoss(states: MossState[]): THREE.Group {
     emissiveIntensity: 0.32,
     vertexColors: true,
   });
-  const mossFootMat = new THREE.MeshStandardMaterial({
-    color: 0x4e6838,
+  // Unlit dark moss — a lit cap read as the white/tan shoreline.
+  const mossFootMat = new THREE.MeshBasicMaterial({
+    color: 0x355028,
     map: mossMap,
-    roughness: 0.96,
-    metalness: 0,
-    emissive: 0x1a2810,
-    emissiveIntensity: 0.22,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
@@ -227,8 +224,7 @@ export function createMoss(states: MossState[]): THREE.Group {
 
     // Green foot at grit height. Same ellipse as the grain keep-out, so
     // the court never shows a tan/grey strip between grit and moss.
-    // Wall only. A closed cap caught the key light and read as a tan slab.
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 0.18, 28, 1, true), mossFootMat);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 0.16, 28, 1, false), mossFootMat);
     foot.scale.set(s.scale * MOSS_FOOT.x + MOSS_GRAIN_PAD, 1, s.scale * MOSS_FOOT.z + MOSS_GRAIN_PAD);
     foot.position.y = 0.03;
     foot.receiveShadow = true;
