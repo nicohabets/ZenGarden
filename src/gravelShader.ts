@@ -72,7 +72,7 @@ export function applyPackedSandShader(
          }
          float grainHeight(vec2 world) {
            float close = smoothstep(2.4, 0.55, uZoom);
-           float freq = mix(260.0, 175.0, close);
+           float freq = mix(280.0, 210.0, close);
            vec4 a = gritCell(world, freq);
            vec4 b = gritCell(world + vec2(0.37, 0.21), freq * 1.7);
            float plate = 0.72 + a.x * 0.28;
@@ -138,7 +138,7 @@ export function applyPackedSandShader(
          vec2 world = (uv - 0.5) * uGarden;
          vGritP = marchGrit(world);
          float close = smoothstep(2.4, 0.55, uZoom);
-         vec4 cell = gritCell(vGritP, mix(240.0, 158.0, close));
+         vec4 cell = gritCell(vGritP, mix(280.0, 210.0, close));
          float gH = grainHeight(vGritP);
          vec4 fieldS = texture2D(uField, uv);
          float fh = fieldS.r;
@@ -167,11 +167,11 @@ export function applyPackedSandShader(
          {
            vec2 uvN = vMapUv;
            float closeN = smoothstep(2.4, 0.55, uZoom);
-           vec4 cellN = gritCell(vGritP, mix(260.0, 175.0, closeN));
+           vec4 cellN = gritCell(vGritP, mix(280.0, 210.0, closeN));
            vec3 gritN = normalize(vec3(
-             (cellN.x - 0.5) * 1.05,
-             1.2,
-             (hash12(vec2(cellN.x, 3.7)) - 0.5) * 1.05
+             (cellN.x - 0.5) * 0.55,
+             1.6,
+             (hash12(vec2(cellN.x, 3.7)) - 0.5) * 0.55
            ));
            vec4 fld = texture2D(uField, uvN);
            vec3 hx = vec3(uGarden.x * uTexel.x, (texture2D(uField, uvN + vec2(uTexel.x, 0.0)).r - fld.r) * uHeightRange, 0.0);
@@ -183,6 +183,6 @@ export function applyPackedSandShader(
         `,
       );
   };
-  mat.customProgramCacheKey = () => `packed-sand-pom-v4-${steps}`;
+  mat.customProgramCacheKey = () => `packed-sand-pom-v5-${steps}`;
   return look;
 }
