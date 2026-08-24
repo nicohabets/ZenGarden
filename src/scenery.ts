@@ -25,17 +25,38 @@ function clayTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-export function createGround(): THREE.Mesh {
+/**
+ * Moss foot in units of `moss.scale`. Grain keep-out uses the same ellipse
+ * so grit meets moss and never sits on it.
+ */
+export const MOSS_FOOT = { x: 0.62, z: 0.52 } as const;
+
+/** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
+export function createGround(): THREE.Group {
+  const group = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({
     color: 0xb8b0a4,
     roughness: 1,
     metalness: 0,
   });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(42, 36), mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = -0.1;
-  mesh.receiveShadow = true;
-  return mesh;
+  const y = -0.12;
+  const w = GARDEN.width;
+  const d = GARDEN.depth;
+  const outer = 16;
+  const strips: Array<[number, number, number, number]> = [
+    [w + outer * 2, outer, 0, d / 2 + outer / 2],
+    [w + outer * 2, outer, 0, -d / 2 - outer / 2],
+    [outer, d, w / 2 + outer / 2, 0],
+    [outer, d, -w / 2 - outer / 2, 0],
+  ];
+  for (const [bw, bd, x, z] of strips) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(bw, bd), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, y, z);
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
 }
 
 /** Pale skirt outside the court so a low camera never falls into a void. */
@@ -116,6 +137,11 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
     v.z *= 0.9 + 0.08 * Math.cos(seed * 0.4 + v.x * 1.6);
     v.y = v.y * 0.38 + 0.2;
     if (v.y < 0.04) v.y = 0.04 + rng() * 0.03;
+    // Drop the lower ring through the grit so the mound meets the court
+    // with moss, not a tan plane under the overhang.
+    if (n.y < 0.12) {
+      v.y = -0.12 + rng() * 0.03;
+    }
     pos.setXYZ(i, v.x, v.y, v.z);
     const c = moss.clone().lerp(mossLite, rng() * 0.55);
     color.setXYZ(i, c.r, c.g, c.b);
@@ -163,11 +189,19 @@ export function createMoss(states: MossState[]): THREE.Group {
     emissiveIntensity: 0.32,
     vertexColors: true,
   });
+  const mossFootMat = new THREE.MeshStandardMaterial({
+    color: 0x6a8a48,
+    map: mossMap,
+    roughness: 0.94,
+    metalness: 0,
+    emissive: 0x2a3a18,
+    emissiveIntensity: 0.28,
+  });
   for (const s of states) {
     const seed = hashFromId(s.id);
     const rng = mulberry32(seed);
     const island = new THREE.Group();
-    island.position.set(s.x, GARDEN.sandY - 0.06, s.z);
+    island.position.set(s.x, GARDEN.sandY - 0.02, s.z);
     island.rotation.y = s.rotY;
     island.userData.kind = "moss";
 
@@ -178,6 +212,15 @@ export function createMoss(states: MossState[]): THREE.Group {
     moss.castShadow = false;
     moss.userData.kind = "moss";
     island.add(moss);
+
+    // Green foot at grit height. Same ellipse as the grain keep-out, so
+    // the court never shows a tan/grey strip between grit and moss.
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.03, 0.16, 28, 1, true), mossFootMat);
+    foot.scale.set(s.scale * MOSS_FOOT.x, 1, s.scale * MOSS_FOOT.z);
+    foot.position.y = 0.04;
+    foot.receiveShadow = true;
+    foot.userData.kind = "moss";
+    island.add(foot);
 
     const pillows = 2 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {

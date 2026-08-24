@@ -16,6 +16,7 @@ import {
   createGround,
   createLanterns,
   createMoss,
+  MOSS_FOOT,
   scatterGravel,
   updateLanterns,
   updateWater,
@@ -487,7 +488,7 @@ export class ZenGarden {
     this.stones.settleToSand((x, z) => this.sand.sampleHeight(x, z));
     if (this.mossGroup) {
       for (const child of this.mossGroup.children) {
-        child.position.y = GARDEN.sandY + this.sand.sampleHeight(child.position.x, child.position.z) - 0.05;
+        child.position.y = GARDEN.sandY + this.sand.sampleHeight(child.position.x, child.position.z) - 0.02;
       }
     }
     if (this.bonsai) {
@@ -516,9 +517,8 @@ export class ZenGarden {
   }
 
   /**
-   * Grain keep-out. Moss is omitted on purpose: a keep-out ellipse punched
-   * the tan halo / inverted ring (pebble rim around a sand hole). Grit packs
-   * under the moss mound so the court stays opaque to the island edge.
+   * Grain keep-out. Moss uses the same ellipse as the green foot so grit
+   * packs to the island and never sits on the mound.
    */
   private grainBlockers(): Blocker[] {
     const list: Blocker[] = [
@@ -527,6 +527,16 @@ export class ZenGarden {
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.28 });
     for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.22 + s.scale * 0.14 });
+    for (const m of this.mossStates) {
+      list.push({
+        x: m.x,
+        z: m.z,
+        r: m.scale * MOSS_FOOT.x,
+        rx: m.scale * MOSS_FOOT.x,
+        rz: m.scale * MOSS_FOOT.z,
+        rotY: m.rotY,
+      });
+    }
     return list;
   }
 
