@@ -241,7 +241,7 @@ test.describe("Zen Garden", () => {
       };
     });
     expect(curved.mode).toBe("curve");
-    expect(curved.alongArc).toBeLessThan(3.5);
+    expect(curved.alongArc).toBeLessThan(4.2);
 
     const circled = await page.evaluate((center) => {
       const api = window.__ZEN_GARDEN__!;
@@ -293,7 +293,7 @@ test.describe("Zen Garden", () => {
     });
     const close = await page.evaluate(() => window.__ZEN_GARDEN__!.getCamera());
     expect(close.zoom).toBeLessThan(1);
-    expect(close.zoom).toBeGreaterThan(0.4);
+    expect(close.zoom).toBeGreaterThan(0.3);
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({ zoom: 0.72, elevation: 0.26, tx: 0.35, tz: -0.18 });

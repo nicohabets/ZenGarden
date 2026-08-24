@@ -9,7 +9,7 @@ test.describe("screenshots", () => {
   test.skip(!process.env.SHOTS, "set SHOTS=1 to capture PR images");
 
   test("nose-on gravel, island rings, and mobile close", async ({ page }) => {
-    test.setTimeout(90_000);
+    test.setTimeout(180_000);
     mkdirSync(outDir, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
@@ -35,25 +35,25 @@ test.describe("screenshots", () => {
     });
     await page.waitForTimeout(1600);
 
-    await page.evaluate((look) => {
+    await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.92,
-        elevation: 0.24,
-        zoom: 0.78,
-        tx: look.cx + 0.85,
-        tz: look.cz + 1.15,
+        azimuth: 0.98,
+        elevation: 0.2,
+        zoom: 0.5,
+        tx: 0.15,
+        tz: 1.88,
       });
-    }, island);
-    await page.waitForTimeout(280);
+    });
+    await page.waitForTimeout(400);
     await page.screenshot({ path: `${outDir}/gravel-close.png`, animations: "disabled" });
 
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.78,
-        elevation: 0.34,
-        zoom: 3.15,
-        tx: look.cx + 0.15,
-        tz: look.cz + 0.35,
+        azimuth: 0.72,
+        elevation: 0.3,
+        zoom: 1.72,
+        tx: look.cx + 0.22,
+        tz: look.cz + 0.55,
       });
     }, island);
     await page.waitForTimeout(280);
@@ -68,14 +68,14 @@ test.describe("screenshots", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.86,
-        elevation: 0.3,
-        zoom: 2.35,
-        tx: look.cx + 0.2,
-        tz: look.cz + 0.45,
+        azimuth: 0.8,
+        elevation: 0.28,
+        zoom: 1.45,
+        tx: look.cx + 0.18,
+        tz: look.cz + 0.48,
       });
     }, island);
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(900);
     await page.screenshot({ path: `${outDir}/mobile-close.png`, animations: "disabled" });
     await page.screenshot({ path: `${outDir}/mobile.png`, animations: "disabled" });
     await page.screenshot({ path: `${outDir}/ishi-gumi-mobile.png`, animations: "disabled" });

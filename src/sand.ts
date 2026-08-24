@@ -52,23 +52,23 @@ export class SandField {
     this.heightTexture.magFilter = THREE.LinearFilter;
     this.heightTexture.generateMipmaps = true;
 
-    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, 260, 152);
+    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, 220, 128);
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshStandardMaterial({
       map: this.texture,
       bumpMap: this.heightTexture,
-      bumpScale: 1.15,
+      bumpScale: 1.55,
       displacementMap: this.heightTexture,
-      displacementScale: 0.042,
-      displacementBias: -0.016,
-      roughness: 0.93,
+      displacementScale: 0.05,
+      displacementBias: -0.02,
+      roughness: 0.9,
       metalness: 0,
       color: 0xf7f4ed,
     });
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = true;
-    this.mesh.castShadow = true;
+    this.mesh.castShadow = false;
     this.mesh.userData.kind = "sand";
   }
 
@@ -203,8 +203,7 @@ export class SandField {
         const x = Math.round(cx + nx * o);
         const y = Math.round(cy + ny * o);
         if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
-        const idx = (y * TEX_W + x) * 4;
-        const luma = img.data[idx] * 0.3 + img.data[idx + 1] * 0.59 + img.data[idx + 2] * 0.11;
+        const luma = sampleLuma(img.data, x, y);
         if (luma < bestDark) {
           bestDark = luma;
           best = o;
@@ -243,8 +242,7 @@ export class SandField {
         const x = Math.round(uv.u + (nx / nlen) * o);
         const y = Math.round(uv.v + (ny / nlen) * o);
         if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
-        const idx = (y * TEX_W + x) * 4;
-        const luma = img.data[idx] * 0.3 + img.data[idx + 1] * 0.59 + img.data[idx + 2] * 0.11;
+        const luma = sampleLuma(img.data, x, y);
         if (luma < bestDark) {
           bestDark = luma;
           best = o;
@@ -294,32 +292,32 @@ export class SandField {
   private scatterGrains(ctx: CanvasRenderingContext2D, rng: () => number, height: boolean): void {
     const img = ctx.getImageData(0, 0, TEX_W, TEX_H);
     const data = img.data;
-    const fine = 145000;
+    const fine = 210000;
     for (let i = 0; i < fine; i++) {
       const x = (rng() * TEX_W) | 0;
       const y = (rng() * TEX_H) | 0;
       const idx = (y * TEX_W + x) * 4;
       if (height) {
-        const d = rng() > 0.5 ? 18 + rng() * 22 : -(12 + rng() * 20);
+        const d = rng() > 0.5 ? 28 + rng() * 36 : -(22 + rng() * 34);
         data[idx] = clampByte(data[idx] + d);
         data[idx + 1] = data[idx];
         data[idx + 2] = data[idx];
       } else {
-        const cool = rng() > 0.5;
-        const a = 0.045 + rng() * 0.1;
-        const src = cool ? [88, 86, 82] : [255, 253, 248];
+        const cool = rng() > 0.48;
+        const a = 0.12 + rng() * 0.22;
+        const src = cool ? [78, 76, 72] : [255, 253, 247];
         data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
         data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
         data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
       }
     }
-    const pebbles = 5200;
+    const pebbles = 14000;
     for (let i = 0; i < pebbles; i++) {
       const x = (rng() * TEX_W) | 0;
       const y = (rng() * TEX_H) | 0;
-      const w = 1 + ((rng() * 2) | 0);
-      const h = 1 + ((rng() * 1.5) | 0);
-      const light = rng() > 0.55;
+      const w = 1 + ((rng() * 3) | 0);
+      const h = 1 + ((rng() * 2) | 0);
+      const light = rng() > 0.52;
       for (let yy = 0; yy < h; yy++) {
         for (let xx = 0; xx < w; xx++) {
           const px = x + xx;
@@ -327,13 +325,13 @@ export class SandField {
           if (px < 0 || py < 0 || px >= TEX_W || py >= TEX_H) continue;
           const idx = (py * TEX_W + px) * 4;
           if (height) {
-            const d = light ? 16 : -18;
+            const d = light ? 28 : -32;
             data[idx] = clampByte(data[idx] + d);
             data[idx + 1] = data[idx];
             data[idx + 2] = data[idx];
           } else {
-            const a = 0.06 + rng() * 0.1;
-            const src = light ? [246, 244, 238] : [104, 102, 96];
+            const a = 0.16 + rng() * 0.22;
+            const src = light ? [250, 248, 242] : [92, 90, 84];
             data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
             data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
             data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
@@ -384,15 +382,15 @@ export class SandField {
     const ny = dx / len;
     const ridge = 1.7 * SAMPLE_SCALE;
 
-    this.strokeOn(this.ctx, ax, ay, bx, by, `rgba(72, 70, 64, ${0.2 + depth * 0.22})`, 1.7 * SAMPLE_SCALE + depth * 1.5 * SAMPLE_SCALE);
+    this.strokeOn(this.ctx, ax, ay, bx, by, `rgba(72, 70, 64, ${0.2 + depth * 0.22})`, (1.25 + depth * 1.25) * SAMPLE_SCALE);
     this.strokeOn(
       this.ctx,
-      ax + nx * 1.5 * SAMPLE_SCALE,
-      ay + ny * 1.5 * SAMPLE_SCALE,
-      bx + nx * 1.5 * SAMPLE_SCALE,
-      by + ny * 1.5 * SAMPLE_SCALE,
+      ax + nx * 1.45 * SAMPLE_SCALE,
+      ay + ny * 1.45 * SAMPLE_SCALE,
+      bx + nx * 1.45 * SAMPLE_SCALE,
+      by + ny * 1.45 * SAMPLE_SCALE,
       `rgba(250, 248, 242, ${0.12 + depth * 0.16})`,
-      1.15 * SAMPLE_SCALE,
+      0.95 * SAMPLE_SCALE,
     );
 
     this.heightCtx.filter = "blur(0.7px)";
@@ -423,8 +421,8 @@ export class SandField {
     blockers: Blocker[],
     depth: number,
   ): void {
-    this.traceWorldArc(this.ctx, cx, cz, radius, a0, a1, steps, blockers, `rgba(66, 64, 58, ${0.22 + depth * 0.24})`, 1.9 * SAMPLE_SCALE + depth * 1.5 * SAMPLE_SCALE);
-    this.traceWorldArc(this.ctx, cx, cz, radius + 0.018, a0, a1, steps, blockers, `rgba(252, 250, 244, ${0.11 + depth * 0.14})`, 1.15 * SAMPLE_SCALE);
+    this.traceWorldArc(this.ctx, cx, cz, radius, a0, a1, steps, blockers, `rgba(66, 64, 58, ${0.22 + depth * 0.24})`, (1.35 + depth * 1.35) * SAMPLE_SCALE);
+    this.traceWorldArc(this.ctx, cx, cz, radius + 0.018, a0, a1, steps, blockers, `rgba(252, 250, 244, ${0.11 + depth * 0.14})`, 0.95 * SAMPLE_SCALE);
     this.heightCtx.filter = "blur(0.7px)";
     this.traceWorldArc(this.heightCtx, cx, cz, radius, a0, a1, steps, blockers, `rgba(40, 40, 40, ${0.44 + depth * 0.36})`, 3.2 * SAMPLE_SCALE + depth * 1.35 * SAMPLE_SCALE);
     this.traceWorldArc(this.heightCtx, cx, cz, radius + 0.02, a0, a1, steps, blockers, `rgba(216, 216, 216, ${0.28 + depth * 0.26})`, 1.7 * SAMPLE_SCALE);
@@ -501,4 +499,20 @@ export class SandField {
 
 function clampByte(v: number): number {
   return Math.max(0, Math.min(255, v | 0));
+}
+
+function sampleLuma(data: Uint8ClampedArray, x: number, y: number): number {
+  let sum = 0;
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const px = x + dx;
+      const py = y + dy;
+      if (px < 0 || py < 0 || px >= TEX_W || py >= TEX_H) continue;
+      const idx = (py * TEX_W + px) * 4;
+      sum += data[idx] * 0.3 + data[idx + 1] * 0.59 + data[idx + 2] * 0.11;
+      n += 1;
+    }
+  }
+  return n ? sum / n : 999;
 }

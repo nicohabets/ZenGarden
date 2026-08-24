@@ -5,10 +5,10 @@ import type { CameraState } from "./types";
 export const MIN_ELEV = 0.18;
 export const MAX_ELEV = 1.12;
 /** Frustum height in world units. Smaller = closer. Grain scale is ~0.5. */
-export const MIN_ZOOM = 0.48;
+export const MIN_ZOOM = 0.38;
 export const MAX_ZOOM = 16;
-export const DEFAULT_ZOOM = 4.35;
-export const DEFAULT_ELEV = 0.36;
+export const DEFAULT_ZOOM = 3.15;
+export const DEFAULT_ELEV = 0.32;
 export const CAMERA_NEAR = 0.016;
 export const CAMERA_FAR = 72;
 const TARGET_Y = 0.045;
