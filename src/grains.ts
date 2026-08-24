@@ -136,15 +136,16 @@ export class GrainCloud {
     for (let i = 0; i < n; i++) {
       const seed = this.seeds[i];
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
-      const y = GARDEN.sandY + h * 0.92 + (seed - 0.5) * 0.002 + this.layers[i] * 0.0034;
-      const s = worldSize * (0.72 + seed * 0.5);
+      const pile = Math.max(0, h);
+      const y = GARDEN.sandY + 0.0016 + pile * 0.95 + this.layers[i] * (0.0032 + pile * 0.06) + (seed - 0.5) * 0.0014;
+      const s = worldSize * (0.7 + seed * 0.42);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 5.1, seed * 6.8, hash2(i + 3, 17) * 6.2);
-      _dummy.scale.set(s * (0.85 + seed * 0.3), s * (0.55 + seed * 0.25), s * (0.8 + hash2(i, 9) * 0.35));
+      _dummy.scale.set(s * (0.88 + seed * 0.24), s * (0.48 + seed * 0.2), s * (0.82 + hash2(i, 9) * 0.28));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const crest = THREE.MathUtils.clamp(h * 8, -0.12, 0.16);
-      _color.setRGB(0.78 + seed * 0.12 + crest, 0.74 + seed * 0.1 + crest * 0.8, 0.66 + seed * 0.08 + crest * 0.5);
+      const crest = Math.min(0.08, pile * 1.4);
+      _color.setRGB(0.71 + seed * 0.07 + crest, 0.68 + seed * 0.06 + crest * 0.7, 0.61 + seed * 0.05 + crest * 0.4);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
