@@ -8,7 +8,7 @@ const SHOT_SEED = 3596739839;
 test.describe("screenshots", () => {
   test.skip(!process.env.SHOTS, "set SHOTS=1 to capture PR images");
 
-  test("desktop, hud, and mobile", async ({ page }) => {
+  test("nose-on gravel, island rings, and mobile close", async ({ page }) => {
     test.setTimeout(90_000);
     mkdirSync(outDir, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -17,7 +17,8 @@ test.describe("screenshots", () => {
     await page.waitForFunction(() => window.__ZEN_GARDEN__?.ready === true);
     await page.evaluate((seed) => window.__ZEN_GARDEN__!.plantSeed(seed), SHOT_SEED);
     await page.waitForFunction((seed) => window.__ZEN_GARDEN__?.getSeed() === seed, SHOT_SEED);
-    await page.evaluate(() => {
+
+    const island = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
       const save = api.getSave();
       const group = (save?.stones ?? []).filter((s) => s.cluster === 0);
@@ -30,23 +31,52 @@ test.describe("screenshots", () => {
       }
       api.rakeStroke(ring);
       api.rakeFromTo(-5.1, 1.88, 4.6, 1.88);
+      return { cx, cz };
     });
     await page.waitForTimeout(1600);
 
-    const shots = [
-      { path: `${outDir}/desktop-isometric.png` },
-      { path: `${outDir}/ishi-gumi-desktop.png` },
-    ];
-    for (const shot of shots) {
-      await page.screenshot({ path: shot.path, animations: "disabled" });
-    }
+    await page.evaluate((look) => {
+      window.__ZEN_GARDEN__!.setCamera({
+        azimuth: 0.92,
+        elevation: 0.24,
+        zoom: 0.78,
+        tx: look.cx + 0.85,
+        tz: look.cz + 1.15,
+      });
+    }, island);
+    await page.waitForTimeout(280);
+    await page.screenshot({ path: `${outDir}/gravel-close.png`, animations: "disabled" });
+
+    await page.evaluate((look) => {
+      window.__ZEN_GARDEN__!.setCamera({
+        azimuth: 0.78,
+        elevation: 0.34,
+        zoom: 3.15,
+        tx: look.cx + 0.15,
+        tz: look.cz + 0.35,
+      });
+    }, island);
+    await page.waitForTimeout(280);
+    await page.screenshot({ path: `${outDir}/island-rings.png`, animations: "disabled" });
+    await page.screenshot({ path: `${outDir}/desktop-isometric.png`, animations: "disabled" });
+    await page.screenshot({ path: `${outDir}/ishi-gumi-desktop.png`, animations: "disabled" });
 
     await page.getByTestId("toolbar").scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${outDir}/desktop-hud.png`, animations: "disabled" });
     await page.screenshot({ path: `${outDir}/ishi-gumi-hud.png`, animations: "disabled" });
 
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate((look) => {
+      window.__ZEN_GARDEN__!.setCamera({
+        azimuth: 0.86,
+        elevation: 0.3,
+        zoom: 2.35,
+        tx: look.cx + 0.2,
+        tz: look.cz + 0.45,
+      });
+    }, island);
     await page.waitForTimeout(500);
+    await page.screenshot({ path: `${outDir}/mobile-close.png`, animations: "disabled" });
     await page.screenshot({ path: `${outDir}/mobile.png`, animations: "disabled" });
     await page.screenshot({ path: `${outDir}/ishi-gumi-mobile.png`, animations: "disabled" });
   });

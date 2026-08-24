@@ -117,6 +117,9 @@ export interface ZenGardenAPI {
   sampleArcDeviation(cx: number, cz: number, radius: number, a0?: number, a1?: number): number;
   getSandTone(): SandTone;
   getMossCount(): number;
+  getCamera(): CameraState;
+  setCamera(state: Partial<CameraState>): void;
+  dolly(delta: number): void;
 }
 
 export const GARDEN = {

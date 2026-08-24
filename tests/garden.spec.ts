@@ -278,4 +278,37 @@ test.describe("Zen Garden", () => {
     await page.getByTestId("tool-rake").click();
     await expect(page.getByTestId("hint")).toContainText(/circle a stone/i);
   });
+
+  test("camera starts on the gravel and can zoom to grain scale", async ({ page }) => {
+    await page.goto("/");
+    await waitForGarden(page);
+
+    const start = await page.evaluate(() => window.__ZEN_GARDEN__!.getCamera());
+    expect(start.zoom).toBeLessThan(6);
+    expect(start.elevation).toBeLessThan(0.55);
+
+    await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      for (let i = 0; i < 48; i++) api.dolly(-0.12);
+    });
+    const close = await page.evaluate(() => window.__ZEN_GARDEN__!.getCamera());
+    expect(close.zoom).toBeLessThan(1);
+    expect(close.zoom).toBeGreaterThan(0.4);
+
+    await page.evaluate(() => {
+      window.__ZEN_GARDEN__!.setCamera({ zoom: 0.72, elevation: 0.26, tx: 0.35, tz: -0.18 });
+    });
+    await page.waitForFunction(() => {
+      const raw = window.localStorage.getItem("zengarden.v1");
+      return !!raw && raw.includes('"zoom":');
+    });
+
+    await page.reload();
+    await waitForGarden(page);
+    const restored = await page.evaluate(() => window.__ZEN_GARDEN__!.getCamera());
+    expect(restored.zoom).toBeCloseTo(0.72, 2);
+    expect(restored.elevation).toBeCloseTo(0.26, 2);
+    expect(restored.tx).toBeCloseTo(0.35, 2);
+    expect(restored.tz).toBeCloseTo(-0.18, 2);
+  });
 });

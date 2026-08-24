@@ -88,11 +88,11 @@ export class ZenGarden {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.16;
+    this.renderer.toneMappingExposure = 1.08;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene.background = new THREE.Color(0xd6d2ca);
-    this.scene.fog = new THREE.Fog(0xd6d2ca, 26, 52);
+    this.scene.fog = new THREE.Fog(0xd6d2ca, 16, 44);
 
     this.sand = new SandField();
     this.seed = freshSeed();
@@ -191,27 +191,28 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf2f0ea, 0x7a766c, 0.78);
+    const hemi = new THREE.HemisphereLight(0xf3f0e8, 0x6a665c, 0.46);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff6ea, 1.22);
-    sun.position.set(7.5, 14, 5.5);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 1.62);
+    sun.position.set(16.5, 4.1, 6.2);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1536, 1536);
-    sun.shadow.camera.near = 2;
-    sun.shadow.camera.far = 42;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 46;
     sun.shadow.camera.left = -14;
     sun.shadow.camera.right = 14;
     sun.shadow.camera.top = 12;
     sun.shadow.camera.bottom = -12;
-    sun.shadow.bias = -0.0007;
+    sun.shadow.bias = -0.00045;
+    sun.shadow.normalBias = 0.02;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xd0d6dc, 0.38);
-    fill.position.set(-8, 6, -4);
+    const fill = new THREE.DirectionalLight(0xc8d0d6, 0.16);
+    fill.position.set(-9, 5.2, -5);
     this.scene.add(fill);
-    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.18);
-    rim.position.set(2, 4, -9);
+    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.12);
+    rim.position.set(2, 3.4, -9);
     this.scene.add(rim);
-    this.scene.add(new THREE.AmbientLight(0xe8e4dc, 0.28));
+    this.scene.add(new THREE.AmbientLight(0xe8e4dc, 0.14));
   }
 
   private bindUi(): void {
@@ -238,7 +239,7 @@ export class ZenGarden {
       "wheel",
       (e) => {
         e.preventDefault();
-        this.cam.dolly(e.deltaY > 0 ? 0.08 : -0.08);
+        this.cam.dolly(e.deltaY > 0 ? 0.07 : -0.07);
         this.scheduleSave();
       },
       { passive: false },
@@ -577,6 +578,22 @@ export class ZenGarden {
       sampleArcDeviation: (cx, cz, radius, a0, a1) => this.sand.sampleArcDeviation(cx, cz, radius, a0, a1),
       getSandTone: () => this.sand.getSandTone(),
       getMossCount: () => this.mossStates.length,
+      getCamera: () => this.cam.toState(),
+      setCamera: (state) => {
+        const cur = this.cam.toState();
+        this.cam.applyState({
+          azimuth: state.azimuth ?? cur.azimuth,
+          elevation: state.elevation ?? cur.elevation,
+          zoom: state.zoom ?? cur.zoom,
+          tx: state.tx ?? cur.tx,
+          tz: state.tz ?? cur.tz,
+        });
+        this.scheduleSave(true);
+      },
+      dolly: (delta) => {
+        this.cam.dolly(delta);
+        this.scheduleSave();
+      },
     };
     window.__ZEN_GARDEN__ = api;
   }
