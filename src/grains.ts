@@ -88,7 +88,7 @@ export class GrainCloud {
       for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
         const col = ((x - x0) / spacing) | 0;
         const keep = hash2(row * 29 + 3, col * 17 + 8);
-        if (keep < 0.1) continue;
+        if (keep < 0.08) continue;
         const hx = hash2(row * 19 + 3, col * 11 + 5);
         const hz = hash2(row * 41 + 7, col * 23 + 2);
         const gx = x + (hx - 0.5) * spacing * 1.65;
@@ -96,7 +96,6 @@ export class GrainCloud {
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
         const h = sand.sampleVisual(gx, gz);
-        if (h < -0.04 && keep < 0.18) continue;
         n = this.pushGrain(n, gx, gz, h, keep, 0);
         if (h > -0.004 && keep > 0.55 && n < cellBudget) {
           const ang = hash2(row + 13, col + 31) * Math.PI * 2;
