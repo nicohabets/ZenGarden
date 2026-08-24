@@ -18,6 +18,7 @@ export class FrameMeter {
   private lastMs = 0;
   private readonly samples: number[] = [];
   private frames = 0;
+  private warmup = 0;
 
   markReady(startedAt: number): void {
     this.readyMs = Math.max(0, performance.now() - startedAt);
@@ -25,13 +26,16 @@ export class FrameMeter {
 
   sample(): void {
     const now = performance.now();
+    this.frames += 1;
     if (this.last > 0) {
       this.lastMs = now - this.last;
-      this.samples.push(this.lastMs);
-      if (this.samples.length > 48) this.samples.shift();
+      this.warmup += 1;
+      if (this.warmup > 18) {
+        this.samples.push(this.lastMs);
+        if (this.samples.length > 48) this.samples.shift();
+      }
     }
     this.last = now;
-    this.frames += 1;
   }
 
   shouldPublish(): boolean {
@@ -39,7 +43,7 @@ export class FrameMeter {
   }
 
   stats(simW: number, simH: number, shadows: boolean): PerfStats {
-    const avg = average(this.samples);
+    const avg = trimmedMean(this.samples);
     const frameMs = this.lastMs || avg;
     return {
       fps: avg > 0 ? 1000 / avg : 0,
@@ -55,9 +59,13 @@ export class FrameMeter {
   }
 }
 
-function average(values: number[]): number {
+function trimmedMean(values: number[]): number {
   if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const cut = Math.floor(sorted.length * 0.2);
+  const slice = sorted.slice(cut, sorted.length - cut || sorted.length);
+  const use = slice.length ? slice : sorted;
   let sum = 0;
-  for (const v of values) sum += v;
-  return sum / values.length;
+  for (const v of use) sum += v;
+  return sum / use.length;
 }

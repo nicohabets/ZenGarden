@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Bonsai } from "./bonsai";
 import { CameraRig } from "./camera";
-import { isMobileGarden, pixelRatioCap, shadowsEnabled } from "./device";
+import { isMobileGarden, isSoftwareGL, pixelRatioCap, shadowsEnabled } from "./device";
 import { generateWorld, inBounds, nextStoneId } from "./generate";
 import { FrameMeter } from "./perf";
 import { loadSave, writeSave } from "./persistence";
@@ -81,18 +81,23 @@ export class ZenGarden {
   private disposed = false;
   private readonly startedAt = performance.now();
   private readonly meter = new FrameMeter();
-  private readonly useShadows = shadowsEnabled();
+  private readonly softwareGL: boolean;
+  private readonly useShadows: boolean;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
+    const probeCanvas = document.createElement("canvas");
+    const probe = probeCanvas.getContext("webgl2") ?? probeCanvas.getContext("webgl");
+    this.softwareGL = isSoftwareGL(probe);
+    this.useShadows = shadowsEnabled(this.softwareGL);
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: !isMobileGarden(),
+      antialias: !isMobileGarden() && !this.softwareGL,
       alpha: false,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(pixelRatioCap());
+    this.renderer.setPixelRatio(pixelRatioCap(this.softwareGL));
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
-    this.renderer.shadowMap.enabled = shadowsEnabled();
+    this.renderer.shadowMap.enabled = this.useShadows;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
@@ -585,7 +590,7 @@ export class ZenGarden {
   private resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.renderer.setPixelRatio(pixelRatioCap());
+    this.renderer.setPixelRatio(pixelRatioCap(this.softwareGL));
     this.renderer.setSize(w, h, false);
     this.cam.setAspect(w / Math.max(1, h));
   }
