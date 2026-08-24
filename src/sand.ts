@@ -118,7 +118,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshLambertMaterial({
-      color: 0xc6baa6,
+      color: 0xb7ab97,
       displacementMap: this.texture,
       displacementScale: SAND_DISP_SCALE,
       displacementBias: SAND_DISP_BIAS,

@@ -204,10 +204,9 @@ export class GrainCloud {
       _dummy.scale.set(s * (0.9 + seed * 0.16), s * (0.72 + seed * 0.18), s * (0.88 + hash2(i, 9) * 0.16));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const trough = h < -0.004 ? -0.03 : 0;
-      const ridge = layer > 0 ? 0.025 : h > 0.008 ? 0.012 : 0;
+      const trough = h < -0.004 ? -0.025 : 0;
       const t = seed;
-      _color.setRGB(0.72 + t * 0.1 + ridge + trough, 0.68 + t * 0.08 + ridge * 0.7 + trough, 0.58 + t * 0.07 + ridge * 0.45 + trough);
+      _color.setRGB(0.62 + t * 0.22 + trough, 0.58 + t * 0.18 + trough, 0.48 + t * 0.16 + trough);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
