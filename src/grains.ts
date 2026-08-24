@@ -121,7 +121,7 @@ export class GrainCloud {
       }
     });
 
-    const bankLayers = hq ? 5 : 3;
+    const bankLayers = hq ? 3 : 2;
     sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, tx, tz, h) => {
       if (n >= this.maxCount) return;
       const across = Math.hypot(tx, tz) || 1;
@@ -239,7 +239,7 @@ export class GrainCloud {
 /** Expand leftover rake relief so a scooped bank still reads after slump. */
 function visualHeight(h: number): number {
   const t = THREE.MathUtils.clamp(h / 0.055, 0, 1);
-  return Math.pow(t, 0.55) * 0.034;
+  return Math.pow(t, 0.6) * 0.014;
 }
 
 /** Solid angular pebble — tetrahedrons left holes that showed the slab. */
