@@ -190,9 +190,9 @@ export class GrainCloud {
       const h = this.hs[i];
       const layer = this.layers[i];
       const floor = h * SAND_HEIGHT_GAIN;
-      const pile = h > 0.002 ? visualHeight(h) : 0;
-      // Troughs sit lower, but never under the court bed — that read as a bare slab.
-      const lift = Math.max(floor + pile, -0.008);
+      // Extra ridge piles read as white pebble clusters on crests and
+      // as a pale shoreline around islands. Height alone is the groove.
+      const lift = Math.max(floor, -0.008);
       const y = GARDEN.sandY + lift + worldSize * 0.36 + layer * LAYER_H;
       const s = worldSize * (0.88 + seed * 0.18);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
@@ -208,12 +208,6 @@ export class GrainCloud {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
-}
-
-/** Expand leftover rake relief so a scooped bank still reads after slump. */
-function visualHeight(h: number): number {
-  const t = THREE.MathUtils.clamp(h / 0.055, 0, 1);
-  return Math.pow(t, 0.6) * 0.018;
 }
 
 /** Small rounded, irregular pebble — not a crystal and not a paper flake. */

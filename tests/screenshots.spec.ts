@@ -37,13 +37,13 @@ test.describe("screenshots", () => {
     await page.waitForTimeout(400);
 
     await page.evaluate(() => {
-      // Grazing close-up on the same clear rake stretch as mobile-close.
-      // Island-1 sits on z=1.88 around x=-0.4; this target stays west of it.
+      // Packed-court close-up on the same clear rake as mobile. A
+      // grazing look-along parked the camera on island-1 (black void).
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 1.52,
-        elevation: 0.182,
-        zoom: 0.38,
-        tx: -2.8,
+        azimuth: 1.35,
+        elevation: 0.36,
+        zoom: 0.42,
+        tx: -2.45,
         tz: 1.88,
       });
     });

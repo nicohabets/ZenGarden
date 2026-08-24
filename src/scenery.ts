@@ -222,16 +222,17 @@ export function createMoss(states: MossState[]): THREE.Group {
     moss.userData.kind = "moss";
     island.add(moss);
 
-    // Unlit green wall under the skirt. A lit cap was the white
-    // shoreline; a dark disc was the close-up void. No top face.
-    const wall = new THREE.Mesh(
-      new THREE.CylinderGeometry(1, 1.04, 0.2, 28, 1, true),
+    // Unlit moss underlay. A lit Standard cap was the white shoreline;
+    // an open ring showed the beige court; a near-black disc was the
+    // close-up void. This only fills pinholes between grit and moss.
+    const under = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 0.1, 28, 1, false),
       new THREE.MeshBasicMaterial({ color: 0x4e6a38 }),
     );
-    wall.scale.set(s.scale * MOSS_FOOT.x, 1, s.scale * MOSS_FOOT.z);
-    wall.position.y = -0.02;
-    wall.userData.kind = "moss";
-    island.add(wall);
+    under.scale.set(s.scale * MOSS_FOOT.x * 1.03, 1, s.scale * MOSS_FOOT.z * 1.03);
+    under.position.y = -0.05;
+    under.userData.kind = "moss";
+    island.add(under);
 
     const pillows = 2 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {
