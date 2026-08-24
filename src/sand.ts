@@ -18,8 +18,11 @@ const RIDGE_OFF = 0.056;
 const RIDGE_SIGMA = 0.03;
 const RAKE_DEPTH = 0.05;
 
-/** Displacement so leftover gaps under the grit still sit in the valley. */
-export const SAND_HEIGHT_GAIN = 2.15;
+/**
+ * Gentle bed only. Steep displacement turned the close-up into a sawtooth
+ * wall; groove relief is piled grit, not the height-field mesh.
+ */
+export const SAND_HEIGHT_GAIN = 0.48;
 export const SAND_DISP_SCALE = H_RANGE * SAND_HEIGHT_GAIN;
 export const SAND_DISP_BIAS = H_MIN * SAND_HEIGHT_GAIN;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
@@ -126,73 +129,6 @@ export class SandField {
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = 2.5;
     mat.polygonOffsetUnits = 2.5;
-    mat.customProgramCacheKey = () => "sand-grit-bed-v2";
-    mat.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          "#include <common>",
-          `#include <common>
-          varying vec3 vGritPos;`,
-        )
-        .replace(
-          "#include <project_vertex>",
-          `#include <project_vertex>
-          vGritPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          "#include <common>",
-          `#include <common>
-          varying vec3 vGritPos;
-          float gritHash(vec2 p) {
-            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-          }
-          float gritNoise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            float a = gritHash(i);
-            float b = gritHash(i + vec2(1.0, 0.0));
-            float c = gritHash(i + vec2(0.0, 1.0));
-            float d = gritHash(i + vec2(1.0, 1.0));
-            vec2 u = f * f * (3.0 - 2.0 * f);
-            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-          }
-          float gritFlake(vec2 world) {
-            vec2 p = world * 210.0;
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            float rnd = gritHash(i);
-            vec2 center = 0.5 + (vec2(gritHash(i + 19.0), gritHash(i + 47.0)) - 0.5) * 0.34;
-            vec2 d = (f - center) * vec2(1.15 + rnd * 0.4, 0.72 + rnd * 0.5);
-            return smoothstep(0.52, 0.18, length(d));
-          }`,
-        )
-        .replace(
-          "#include <color_fragment>",
-          `#include <color_fragment>
-          float flake = gritFlake(vGritPos.xz);
-          float fine = gritNoise(vGritPos.xz * 720.0);
-          float dust = gritNoise(vGritPos.xz * 1600.0);
-          vec3 shadowGrit = vec3(0.60, 0.56, 0.48);
-          vec3 midGrit = vec3(0.74, 0.70, 0.62);
-          vec3 paleGrit = vec3(0.86, 0.82, 0.73);
-          vec3 bed = mix(shadowGrit, midGrit, fine);
-          bed = mix(bed, paleGrit, flake * (0.65 + dust * 0.35));
-          diffuseColor.rgb = bed;`,
-        )
-        .replace(
-          "#include <normal_fragment_begin>",
-          `#include <normal_fragment_begin>
-          {
-            float e = 0.004;
-            float h0 = gritFlake(vGritPos.xz) + gritNoise(vGritPos.xz * 720.0) * 0.45;
-            float hx = gritFlake(vGritPos.xz + vec2(e, 0.0)) + gritNoise((vGritPos.xz + vec2(e, 0.0)) * 720.0) * 0.45;
-            float hz = gritFlake(vGritPos.xz + vec2(0.0, e)) + gritNoise((vGritPos.xz + vec2(0.0, e)) * 720.0) * 0.45;
-            vec3 gritN = normalize(vec3((h0 - hx) * 14.0, 1.0, (h0 - hz) * 14.0));
-            normal = normalize(normal + gritN - vec3(0.0, 1.0, 0.0));
-          }`,
-        );
-    };
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
@@ -1160,19 +1096,19 @@ function gritAlbedoTexture(): THREE.CanvasTexture {
   canvas.height = size;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("grit texture");
-  ctx.fillStyle = "#b8ad9a";
+  ctx.fillStyle = "#c4b8a4";
   ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 24000; i++) {
+  for (let i = 0; i < 12000; i++) {
     const x = (i * 53 + 17) % size;
     const y = (i * 97 + 31) % size;
-    const shade = 150 + ((i * 13) % 70);
-    ctx.fillStyle = `rgb(${shade},${Math.max(0, shade - 10)},${Math.max(0, shade - 28)})`;
-    ctx.fillRect(x, y, 1 + (i % 3), 1 + ((i >> 2) % 2));
+    const shade = 176 + ((i * 13) % 28);
+    ctx.fillStyle = `rgb(${shade},${Math.max(0, shade - 8)},${Math.max(0, shade - 20)})`;
+    ctx.fillRect(x, y, 1 + (i % 2), 1);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(96, 56);
+  tex.repeat.set(36, 21);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   tex.needsUpdate = true;

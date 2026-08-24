@@ -16,7 +16,7 @@ const _color = new THREE.Color();
 
 /** Bank growth in metres so piles stay readable at every zoom. */
 const LAYER_H = 0.0024;
-const SLUMP = 0.006;
+const SLUMP = 0.0075;
 
 /**
  * Packed millimetre grit. A rake scoops a valley and stacks that mass on
@@ -93,7 +93,7 @@ export class GrainCloud {
         const gz = z + (hz - 0.5) * spacing * jitter;
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
-        const mass = sand.sampleHeight(gx, gz);
+        const mass = hq ? sand.sampleVisual(gx, gz) : sand.sampleHeight(gx, gz);
         n = this.pushGrain(n, gx, gz, mass, hx, 0);
         if (hq && mass < -0.006 && n < cellBudget) {
           const ox = gx + (hz - 0.5) * spacing * 0.4;
@@ -116,7 +116,7 @@ export class GrainCloud {
         const gx = x + nx * k + (hash2((x * 67 + k * 40) | 0, 3) - 0.5) * spacing * 0.28;
         const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.28;
         if (blocked(gx, gz, blockers)) continue;
-        const mass = sand.sampleHeight(gx, gz);
+        const mass = hq ? sand.sampleVisual(gx, gz) : sand.sampleHeight(gx, gz);
         n = this.pushGrain(n, gx, gz, mass, hash2((gx * 90) | 0, (gz * 90) | 0), 0);
       }
     });
@@ -203,8 +203,8 @@ export class GrainCloud {
       const h = this.hs[i];
       const layer = this.layers[i];
       const floor = h * SAND_HEIGHT_GAIN;
-      const pile = h > 0.002 ? Math.max(0, visualHeight(h) - floor) : 0;
-      const y = GARDEN.sandY + floor + pile + worldSize * 0.58 + layer * LAYER_H + 0.0012;
+      const pile = h > 0.002 ? visualHeight(h) : 0;
+      const y = GARDEN.sandY + floor + pile + worldSize * 0.55 + layer * LAYER_H + 0.0014;
       const s = worldSize * (0.84 + seed * 0.24);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
@@ -222,9 +222,8 @@ export class GrainCloud {
 
 /** Expand leftover rake relief so a scooped bank still reads after slump. */
 function visualHeight(h: number): number {
-  const t = THREE.MathUtils.clamp(h / 0.055, -1, 1);
-  const mag = Math.pow(Math.abs(t), 0.46) * 0.12;
-  return Math.sign(t) * mag;
+  const t = THREE.MathUtils.clamp(h / 0.055, 0, 1);
+  return Math.pow(t, 0.55) * 0.042;
 }
 
 /** Angular chip — dry grit with enough height to read in a groove. */
