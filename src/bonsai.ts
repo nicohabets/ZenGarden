@@ -56,6 +56,7 @@ export class Bonsai {
     this.group.userData.kind = "bonsai";
     this.season = season;
     this.build();
+    this.group.scale.setScalar(0.56);
     this.setPose(state.x, state.z, state.rotY);
     for (const id of state.pruned) this.removeFoliage(id);
     this.applySeason(state, season);

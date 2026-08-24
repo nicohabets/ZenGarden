@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { GARDEN, type Blocker } from "./types";
+import { GARDEN, type Blocker, type SandTone } from "./types";
 import { mulberry32 } from "./rng";
 
-const TEX_W = 768;
+const TEX_W = 1024;
 const TEX_H = 640;
 
 export class SandField {
@@ -16,7 +16,7 @@ export class SandField {
     this.canvas = document.createElement("canvas");
     this.canvas.width = TEX_W;
     this.canvas.height = TEX_H;
-    const ctx = this.canvas.getContext("2d", { willReadFrequently: false });
+    const ctx = this.canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) throw new Error("Could not create sand canvas");
     this.ctx = ctx;
 
@@ -26,18 +26,21 @@ export class SandField {
     this.texture.anisotropy = 8;
     this.texture.wrapS = THREE.ClampToEdgeWrapping;
     this.texture.wrapT = THREE.ClampToEdgeWrapping;
+    this.texture.minFilter = THREE.LinearMipmapLinearFilter;
+    this.texture.magFilter = THREE.LinearFilter;
+    this.texture.generateMipmaps = true;
 
-    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, 96, 80);
+    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, 140, 88);
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshStandardMaterial({
       map: this.texture,
       bumpMap: this.texture,
-      bumpScale: 0.58,
+      bumpScale: 0.28,
       displacementMap: this.texture,
-      displacementScale: 0.078,
-      roughness: 0.94,
-      metalness: 0.02,
-      color: 0xf3e6c8,
+      displacementScale: 0.02,
+      roughness: 0.98,
+      metalness: 0,
+      color: 0xf6f3ec,
     });
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
@@ -49,18 +52,26 @@ export class SandField {
     const { ctx, canvas } = this;
     const rng = mulberry32(seed);
     const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    g.addColorStop(0, "#d8c39a");
-    g.addColorStop(0.45, "#e2cc9f");
-    g.addColorStop(1, "#c9b17f");
+    g.addColorStop(0, "#eceae4");
+    g.addColorStop(0.48, "#f5f2eb");
+    g.addColorStop(1, "#e4e1d8");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    for (let i = 0; i < 4200; i++) {
+    for (let i = 0; i < 26000; i++) {
       const x = rng() * canvas.width;
       const y = rng() * canvas.height;
-      const a = 0.035 + rng() * 0.07;
-      ctx.fillStyle = rng() > 0.5 ? `rgba(90,70,40,${a})` : `rgba(255,240,210,${a})`;
-      ctx.fillRect(x, y, 1 + rng() * 2, 1 + rng() * 1.5);
+      const a = 0.02 + rng() * 0.05;
+      const cool = rng() > 0.5;
+      ctx.fillStyle = cool ? `rgba(92,90,86,${a})` : `rgba(255,253,248,${a})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+    for (let i = 0; i < 2200; i++) {
+      const x = rng() * canvas.width;
+      const y = rng() * canvas.height;
+      const a = 0.03 + rng() * 0.06;
+      ctx.fillStyle = rng() > 0.55 ? `rgba(110,108,102,${a})` : `rgba(244,242,236,${a})`;
+      ctx.fillRect(x, y, 1 + rng(), 1);
     }
     this.markDirty();
   }
@@ -86,27 +97,10 @@ export class SandField {
     const nx = -dy / len;
     const ny = dx / len;
     const tines = 7;
-    const spacing = 4.35;
+    const spacing = 4.15;
     const ctx = this.ctx;
-    const wave = 1.15;
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    const stroke = (ox: number, oy: number, width: number, color: string, wobble: number) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.beginPath();
-      const steps = Math.max(2, Math.ceil(len / 6));
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const px = a.u + dx * t + ox + nx * Math.sin(t * Math.PI * 2 + len) * wobble;
-        const py = a.v + dy * t + oy + ny * Math.sin(t * Math.PI * 2 + len) * wobble;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-    };
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
 
     for (let t = 0; t < tines; t++) {
       const center = (tines - 1) / 2;
@@ -114,54 +108,186 @@ export class SandField {
       const depth = 1 - Math.abs(t - center) / (center + 0.01);
       const ox = nx * off;
       const oy = ny * off;
-      stroke(ox, oy, 1.6 + depth * 1.8, `rgba(68, 52, 32, ${0.16 + depth * 0.2})`, wave);
-      stroke(ox + nx * 1.6, oy + ny * 1.6, 1.05, `rgba(255, 246, 220, ${0.1 + depth * 0.16})`, wave * 0.6);
+      ctx.strokeStyle = `rgba(78, 76, 70, ${0.16 + depth * 0.18})`;
+      ctx.lineWidth = 1.25 + depth * 1.25;
+      ctx.beginPath();
+      ctx.moveTo(a.u + ox, a.v + oy);
+      ctx.lineTo(b.u + ox, b.v + oy);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(248, 246, 240, ${0.1 + depth * 0.14})`;
+      ctx.lineWidth = 0.95;
+      ctx.beginPath();
+      ctx.moveTo(a.u + ox + nx * 1.45, a.v + oy + ny * 1.45);
+      ctx.lineTo(b.u + ox + nx * 1.45, b.v + oy + ny * 1.45);
+      ctx.stroke();
     }
     this.markDirty();
   }
 
-  paintConcentric(wx: number, wz: number, radiusWorld: number, tineGap = 0.22): void {
-    const c = this.worldToUv(wx, wz);
-    const maxR = (radiusWorld / GARDEN.width) * TEX_W;
-    const gap = (tineGap / GARDEN.width) * TEX_W;
+  rakeArc(
+    cx: number,
+    cz: number,
+    radius: number,
+    a0: number,
+    a1: number,
+    blockers: Blocker[],
+  ): void {
+    const sweep = a1 - a0;
+    if (Math.abs(sweep) < 0.008 || radius < 0.12) return;
+    const steps = Math.max(3, Math.ceil(radius * Math.abs(sweep) * 18));
+    const tines = 7;
+    const spacing = 0.055;
     const ctx = this.ctx;
-    ctx.lineCap = "round";
-    for (let r = gap * 1.6; r < maxR; r += gap * 1.85) {
-      ctx.strokeStyle = "rgba(70, 56, 34, 0.24)";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.arc(c.u, c.v, r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = "rgba(255, 246, 220, 0.16)";
-      ctx.lineWidth = 1.15;
-      ctx.beginPath();
-      ctx.arc(c.u, c.v, r + 1.8, 0, Math.PI * 2);
-      ctx.stroke();
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+
+    for (let t = 0; t < tines; t++) {
+      const center = (tines - 1) / 2;
+      const r = radius + (t - center) * spacing;
+      if (r < 0.1) continue;
+      const depth = 1 - Math.abs(t - center) / (center + 0.01);
+      this.strokeWorldArc(cx, cz, r, a0, a1, steps, blockers, `rgba(70, 68, 62, ${0.2 + depth * 0.2})`, 1.35 + depth * 1.35);
+      this.strokeWorldArc(cx, cz, r + 0.018, a0, a1, steps, blockers, `rgba(252, 250, 244, ${0.1 + depth * 0.12})`, 0.95);
     }
     this.markDirty();
   }
 
-  paintWaves(seed: number): void {
+  paintRing(wx: number, wz: number, radiusWorld: number, innerWorld = 0.42, tineGap = 0.165): void {
+    const ctx = this.ctx;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    for (let r = innerWorld + tineGap; r < radiusWorld; r += tineGap) {
+      this.strokeWorldCircle(wx, wz, r, "rgba(70, 68, 62, 0.26)", 2.15);
+      this.strokeWorldCircle(wx, wz, r + 0.02, "rgba(255, 252, 246, 0.13)", 1);
+    }
+    this.markDirty();
+  }
+
+  paintParallel(seed: number): void {
     const rng = mulberry32(seed ^ 0x51ed);
     const ctx = this.ctx;
-    const bands = 7 + Math.floor(rng() * 4);
-    ctx.lineCap = "round";
-    for (let i = 0; i < bands; i++) {
-      const y0 = (rng() * 0.7 + 0.12) * TEX_H;
-      const amp = 8 + rng() * 18;
-      const freq = 0.008 + rng() * 0.01;
-      const phase = rng() * Math.PI * 2;
-      ctx.strokeStyle = "rgba(68, 54, 32, 0.18)";
-      ctx.lineWidth = 2.1;
+    const gap = 11 + Math.floor(rng() * 3);
+    const inset = 18;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    for (let y = inset; y < TEX_H - inset; y += gap) {
+      ctx.strokeStyle = "rgba(78, 76, 70, 0.16)";
+      ctx.lineWidth = 1.85;
       ctx.beginPath();
-      for (let x = 20; x < TEX_W - 20; x += 4) {
-        const y = y0 + Math.sin(x * freq + phase) * amp;
-        if (x === 20) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
+      ctx.moveTo(inset, y);
+      ctx.lineTo(TEX_W - inset, y);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(248, 246, 240, 0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(inset, y + 1.6);
+      ctx.lineTo(TEX_W - inset, y + 1.6);
       ctx.stroke();
     }
     this.markDirty();
+  }
+
+  getSandTone(): SandTone {
+    this.flush();
+    const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    const step = 32;
+    let n = 0;
+    for (let y = 8; y < TEX_H; y += step) {
+      for (let x = 8; x < TEX_W; x += step) {
+        const i = (y * TEX_W + x) * 4;
+        r += img.data[i];
+        g += img.data[i + 1];
+        b += img.data[i + 2];
+        n += 1;
+      }
+    }
+    r /= n;
+    g /= n;
+    b /= n;
+    return { r, g, b, luma: r * 0.3 + g * 0.59 + b * 0.11 };
+  }
+
+  sampleGrooveDeviation(fromX: number, fromZ: number, toX: number, toZ: number): number {
+    this.flush();
+    const a = this.worldToUv(fromX, fromZ);
+    const b = this.worldToUv(toX, toZ);
+    const dx = b.u - a.u;
+    const dy = b.v - a.v;
+    const len = Math.hypot(dx, dy);
+    if (len < 8) return 0;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
+    const offsets: number[] = [];
+    const steps = Math.max(8, Math.floor(len / 5));
+    let prev = 0;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = a.u + dx * t;
+      const cy = a.v + dy * t;
+      let best = prev;
+      let bestDark = 999;
+      const lo = i === 0 ? -12 : prev - 3;
+      const hi = i === 0 ? 12 : prev + 3;
+      for (let o = lo; o <= hi; o++) {
+        const x = Math.round(cx + nx * o);
+        const y = Math.round(cy + ny * o);
+        if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
+        const idx = (y * TEX_W + x) * 4;
+        const luma = img.data[idx] * 0.3 + img.data[idx + 1] * 0.59 + img.data[idx + 2] * 0.11;
+        if (luma < bestDark) {
+          bestDark = luma;
+          best = o;
+        }
+      }
+      prev = best;
+      offsets.push(best);
+    }
+    const mean = offsets.reduce((s, v) => s + v, 0) / offsets.length;
+    const variance = offsets.reduce((s, v) => s + (v - mean) ** 2, 0) / offsets.length;
+    return Math.sqrt(variance);
+  }
+
+  sampleArcDeviation(cx: number, cz: number, radius: number, a0 = 0, a1 = Math.PI * 2): number {
+    this.flush();
+    const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
+    const steps = 36;
+    const radii: number[] = [];
+    let prev = 0;
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      const px = cx + Math.cos(a) * radius;
+      const pz = cz + Math.sin(a) * radius;
+      const uv = this.worldToUv(px, pz);
+      const inward = this.worldToUv(cx + Math.cos(a) * (radius - 0.2), cz + Math.sin(a) * (radius - 0.2));
+      const nx = uv.u - inward.u;
+      const ny = uv.v - inward.v;
+      const nlen = Math.hypot(nx, ny) || 1;
+      let best = prev;
+      let bestDark = 999;
+      const lo = i === 0 ? -8 : prev - 3;
+      const hi = i === 0 ? 8 : prev + 3;
+      for (let o = lo; o <= hi; o++) {
+        const x = Math.round(uv.u + (nx / nlen) * o);
+        const y = Math.round(uv.v + (ny / nlen) * o);
+        if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
+        const idx = (y * TEX_W + x) * 4;
+        const luma = img.data[idx] * 0.3 + img.data[idx + 1] * 0.59 + img.data[idx + 2] * 0.11;
+        if (luma < bestDark) {
+          bestDark = luma;
+          best = o;
+        }
+      }
+      prev = best;
+      radii.push(best);
+    }
+    const mean = radii.reduce((s, v) => s + v, 0) / radii.length;
+    const variance = radii.reduce((s, v) => s + (v - mean) ** 2, 0) / radii.length;
+    return Math.sqrt(variance);
   }
 
   exportDataUrl(): string {
@@ -186,6 +312,45 @@ export class SandField {
     if (!this.dirty) return;
     this.texture.needsUpdate = true;
     this.dirty = false;
+  }
+
+  private strokeWorldCircle(wx: number, wz: number, radius: number, color: string, width: number): void {
+    this.strokeWorldArc(wx, wz, radius, 0, Math.PI * 2, Math.max(40, Math.ceil(radius * 42)), [], color, width);
+  }
+
+  private strokeWorldArc(
+    cx: number,
+    cz: number,
+    radius: number,
+    a0: number,
+    a1: number,
+    steps: number,
+    blockers: Blocker[],
+    color: string,
+    width: number,
+  ): void {
+    const ctx = this.ctx;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    let drawing = false;
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      const x = cx + Math.cos(a) * radius;
+      const z = cz + Math.sin(a) * radius;
+      if (!this.clearOfBlockers(x, z, blockers)) {
+        drawing = false;
+        continue;
+      }
+      const uv = this.worldToUv(x, z);
+      if (!drawing) {
+        ctx.beginPath();
+        ctx.moveTo(uv.u, uv.v);
+        drawing = true;
+      } else {
+        ctx.lineTo(uv.u, uv.v);
+      }
+    }
+    if (drawing) ctx.stroke();
   }
 
   private markDirty(): void {

@@ -2,15 +2,38 @@ import * as THREE from "three";
 import { mulberry32, randRange } from "./rng";
 import { GARDEN, type BasinState, type LanternState, type MossState } from "./types";
 
+function clayTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("clay texture");
+  ctx.fillStyle = "#d2a86a";
+  ctx.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 900; i++) {
+    const x = (i * 17) % 128;
+    const y = (i * 31 + 5) % 128;
+    ctx.fillStyle = i % 4 === 0 ? "#b88a52" : i % 3 === 0 ? "#e0ba7c" : "#c89860";
+    ctx.fillRect(x, y, 2, 1);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 1.2);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 export function createGround(): THREE.Mesh {
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x8d866f,
+    color: 0x7a7468,
     roughness: 1,
     metalness: 0,
   });
-  const mesh = new THREE.Mesh(new THREE.CircleGeometry(28, 48), mat);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(42, 36), mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = -0.08;
+  mesh.position.y = -0.1;
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -18,21 +41,21 @@ export function createGround(): THREE.Mesh {
 export function createFrame(): THREE.Group {
   const group = new THREE.Group();
   const wood = new THREE.MeshStandardMaterial({
-    color: 0x4a3828,
-    roughness: 0.82,
-    metalness: 0.04,
+    color: 0x3a3228,
+    roughness: 0.9,
+    metalness: 0.02,
   });
-  const w = GARDEN.width + 0.46;
-  const d = GARDEN.depth + 0.46;
+  const w = GARDEN.width + 0.38;
+  const d = GARDEN.depth + 0.38;
   const beam = (len: number, thick: number, high: number) =>
     new THREE.Mesh(new THREE.BoxGeometry(len, high, thick), wood);
 
-  const longA = beam(w, 0.28, 0.22);
-  longA.position.set(0, 0.08, d / 2);
+  const longA = beam(w, 0.22, 0.16);
+  longA.position.set(0, 0.05, d / 2);
   const longB = longA.clone();
   longB.position.z = -d / 2;
-  const shortA = beam(0.28, d, 0.22);
-  shortA.position.set(w / 2, 0.08, 0);
+  const shortA = beam(0.22, d, 0.16);
+  shortA.position.set(w / 2, 0.05, 0);
   const shortB = shortA.clone();
   shortB.position.x = -w / 2;
 
@@ -41,40 +64,80 @@ export function createFrame(): THREE.Group {
     m.receiveShadow = true;
     group.add(m);
   }
-
-  const postGeo = new THREE.BoxGeometry(0.34, 0.32, 0.34);
-  for (const [x, z] of [
-    [w / 2, d / 2],
-    [w / 2, -d / 2],
-    [-w / 2, d / 2],
-    [-w / 2, -d / 2],
-  ] as const) {
-    const post = new THREE.Mesh(postGeo, wood);
-    post.position.set(x, 0.12, z);
-    post.castShadow = true;
-    group.add(post);
-  }
   return group;
+}
+
+function islandGeometry(seed: number): THREE.BufferGeometry {
+  const geo = new THREE.SphereGeometry(1, 24, 16);
+  const rng = mulberry32(seed);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const n = v.clone().normalize();
+    const wobble =
+      0.16 * Math.sin(v.x * 3.1 + seed) +
+      0.11 * Math.cos(v.z * 4.2 + seed * 0.7) +
+      0.05 * (rng() - 0.5);
+    v.addScaledVector(n, wobble);
+    v.y *= 0.22;
+    if (v.y < 0) v.y *= 0.25;
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  return geo;
 }
 
 export function createMoss(states: MossState[]): THREE.Group {
   const group = new THREE.Group();
-  const colors = [0x5a6848, 0x4d5c3e, 0x677352];
+  const mossColors = [0x3a4632, 0x445238, 0x384632];
+  const earth = new THREE.MeshStandardMaterial({
+    color: 0x5a4e3c,
+    roughness: 0.98,
+    metalness: 0,
+  });
   for (const s of states) {
-    const rng = mulberry32(hashFromId(s.id));
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 10, 8),
+    const seed = hashFromId(s.id);
+    const rng = mulberry32(seed);
+    const island = new THREE.Group();
+    island.position.set(s.x, GARDEN.sandY + 0.012, s.z);
+    island.rotation.y = s.rotY;
+    island.userData.kind = "moss";
+
+    const soil = new THREE.Mesh(islandGeometry(seed ^ 0x51), earth);
+    soil.scale.set(s.scale * 0.58, s.scale * 0.09, s.scale * 0.5);
+    soil.receiveShadow = true;
+    soil.userData.kind = "moss";
+    island.add(soil);
+
+    const moss = new THREE.Mesh(
+      islandGeometry(seed),
       new THREE.MeshStandardMaterial({
-        color: colors[Math.abs(hashFromId(s.id)) % colors.length],
-        roughness: 0.95,
+        color: mossColors[seed % mossColors.length],
+        roughness: 0.99,
+        metalness: 0,
       }),
     );
-    mesh.scale.set(s.scale * 0.55, s.scale * 0.16 + rng() * 0.04, s.scale * 0.48);
-    mesh.position.set(s.x, GARDEN.sandY + 0.04, s.z);
-    mesh.rotation.y = s.rotY;
-    mesh.receiveShadow = true;
-    mesh.userData.kind = "moss";
-    group.add(mesh);
+    moss.scale.set(s.scale * 0.52, s.scale * 0.12, s.scale * 0.44);
+    moss.position.y = 0.02;
+    moss.receiveShadow = true;
+    moss.userData.kind = "moss";
+    island.add(moss);
+
+    if (rng() > 0.35) {
+      const bump = new THREE.Mesh(
+        islandGeometry(seed ^ 17),
+        new THREE.MeshStandardMaterial({
+          color: 0x4a5440,
+          roughness: 0.99,
+        }),
+      );
+      bump.scale.set(s.scale * 0.22, s.scale * 0.07, s.scale * 0.2);
+      bump.position.set(randRange(rng, -0.18, 0.18) * s.scale, 0.03, randRange(rng, -0.14, 0.14) * s.scale);
+      bump.userData.kind = "moss";
+      island.add(bump);
+    }
+    group.add(island);
   }
   return group;
 }
@@ -87,12 +150,13 @@ export function createBasin(state: BasinState): THREE.Group {
 
   const stone = new THREE.MeshStandardMaterial({
     color: 0x6a6660,
-    roughness: 0.88,
+    roughness: 0.9,
+    metalness: 0.03,
     flatShading: true,
   });
 
-  const block = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.28, 1.15), stone);
-  block.position.y = 0.12;
+  const block = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.22, 0.95), stone);
+  block.position.y = 0.1;
   block.castShadow = true;
   block.receiveShadow = true;
   block.userData.kind = "basin";
@@ -101,8 +165,8 @@ export function createBasin(state: BasinState): THREE.Group {
   const points: THREE.Vector2[] = [];
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
-    const x = 0.18 + t * 0.28 + (t > 0.7 ? (t - 0.7) * 0.15 : 0);
-    const y = 0.28 + t * 0.22;
+    const x = 0.15 + t * 0.22 + (t > 0.7 ? (t - 0.7) * 0.12 : 0);
+    const y = 0.22 + t * 0.18;
     points.push(new THREE.Vector2(x, y));
   }
   const bowl = new THREE.Mesh(new THREE.LatheGeometry(points, 20), stone);
@@ -118,9 +182,9 @@ export function createBasin(state: BasinState): THREE.Group {
     opacity: 0.82,
     transmission: 0.25,
   });
-  const water = new THREE.Mesh(new THREE.CircleGeometry(0.34, 24), waterMat);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(0.28, 24), waterMat);
   water.rotation.x = -Math.PI / 2;
-  water.position.y = 0.46;
+  water.position.y = 0.38;
   water.userData.kind = "basin";
   water.userData.water = true;
   group.add(water);
@@ -128,13 +192,13 @@ export function createBasin(state: BasinState): THREE.Group {
   const koiColors = [0xc45a32, 0xf2efe6];
   for (let i = 0; i < 2; i++) {
     const koi = new THREE.Mesh(
-      new THREE.SphereGeometry(0.035, 8, 6),
+      new THREE.SphereGeometry(0.03, 8, 6),
       new THREE.MeshStandardMaterial({ color: koiColors[i], roughness: 0.35 }),
     );
     koi.scale.set(2.1, 0.55, 0.75);
-    koi.position.y = 0.452;
+    koi.position.y = 0.372;
     koi.userData.kind = "basin";
-    koi.userData.koi = { angle: i * Math.PI, speed: 0.55 + i * 0.12, radius: 0.14 + i * 0.04 };
+    koi.userData.koi = { angle: i * Math.PI, speed: 0.55 + i * 0.12, radius: 0.11 + i * 0.03 };
     group.add(koi);
   }
 
@@ -150,17 +214,17 @@ export function createLantern(state: LanternState): THREE.Group {
 
   const stone = new THREE.MeshStandardMaterial({
     color: 0x5e5a54,
-    roughness: 0.86,
+    roughness: 0.88,
     flatShading: true,
   });
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.34), stone);
-  base.position.y = 0.06;
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.09, 0.3), stone);
+  base.position.y = 0.05;
   base.castShadow = true;
   base.userData.kind = "lantern";
   group.add(base);
 
-  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.32, 0.11), stone);
-  shaft.position.y = 0.26;
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.28, 0.1), stone);
+  shaft.position.y = 0.22;
   shaft.castShadow = true;
   shaft.userData.kind = "lantern";
   group.add(shaft);
@@ -168,24 +232,24 @@ export function createLantern(state: LanternState): THREE.Group {
   const glowMat = new THREE.MeshStandardMaterial({
     color: 0xf0c878,
     emissive: 0xc4893a,
-    emissiveIntensity: 0.7,
+    emissiveIntensity: 0.55,
     roughness: 0.4,
   });
-  const chamber = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.2), glowMat);
-  chamber.position.y = 0.48;
+  const chamber = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.18), glowMat);
+  chamber.position.y = 0.42;
   chamber.userData.kind = "lantern";
   chamber.userData.lanternGlow = true;
   group.add(chamber);
 
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.14, 4), stone);
-  roof.position.y = 0.62;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.12, 4), stone);
+  roof.position.y = 0.54;
   roof.rotation.y = Math.PI / 4;
   roof.castShadow = true;
   roof.userData.kind = "lantern";
   group.add(roof);
 
-  const light = new THREE.PointLight(0xffc878, 0.55, 4.8, 2);
-  light.position.y = 0.5;
+  const light = new THREE.PointLight(0xffc878, 0.4, 4.2, 2);
+  light.position.y = 0.44;
   group.add(light);
   return group;
 }
@@ -198,21 +262,62 @@ export function createLanterns(states: LanternState[]): THREE.Group {
 
 export function createBackdrop(): THREE.Group {
   const group = new THREE.Group();
-  const slat = new THREE.MeshStandardMaterial({
-    color: 0x3f3428,
-    roughness: 0.86,
+  const clay = new THREE.MeshStandardMaterial({
+    color: 0xe0b878,
+    map: clayTexture(),
+    roughness: 0.92,
+    metalness: 0,
+    emissive: 0x3a2810,
+    emissiveIntensity: 0.08,
   });
-  const fence = new THREE.Group();
-  for (let i = 0; i < 18; i++) {
-    const board = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.15, 0.04), slat);
-    board.position.set(-5 + i * 0.58, 0.55, -6.4);
-    board.castShadow = true;
-    fence.add(board);
-  }
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.08, 0.08), slat);
-  rail.position.set(0.1, 1.05, -6.4);
-  fence.add(rail);
-  group.add(fence);
+  const tile = new THREE.MeshStandardMaterial({
+    color: 0x2a2622,
+    roughness: 0.86,
+    metalness: 0.04,
+  });
+
+  const wallH = 1.72;
+  const wallY = wallH / 2 - 0.02;
+  const thick = 0.18;
+  const backZ = -GARDEN.depth / 2 - 0.72;
+  const sideX = GARDEN.width / 2 + 0.82;
+  const backW = GARDEN.width + 1.9;
+  const sideL = GARDEN.depth + 1.15;
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(backW, wallH, thick), clay);
+  back.position.set(0, wallY, backZ);
+  back.castShadow = true;
+  group.add(back);
+
+  const left = new THREE.Mesh(new THREE.BoxGeometry(thick, wallH, sideL), clay);
+  left.position.set(-sideX, wallY, -0.2);
+  left.castShadow = true;
+  group.add(left);
+
+  const right = new THREE.Mesh(new THREE.BoxGeometry(thick, wallH, sideL), clay);
+  right.position.set(sideX, wallY, -0.2);
+  right.castShadow = true;
+  group.add(right);
+
+  const deck = new THREE.Mesh(
+    new THREE.BoxGeometry(GARDEN.width + 0.6, 0.09, 1.35),
+    new THREE.MeshStandardMaterial({ color: 0x4a4034, roughness: 0.88 }),
+  );
+  deck.position.set(0, -0.01, GARDEN.depth / 2 + 0.85);
+  deck.receiveShadow = true;
+  group.add(deck);
+
+  const cap = (w: number, d: number, x: number, z: number, rotY = 0) => {
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), tile);
+    roof.position.set(x, wallH + 0.02, z);
+    roof.rotation.y = rotY;
+    roof.castShadow = true;
+    group.add(roof);
+  };
+  cap(backW + 0.28, 0.36, 0, backZ);
+  cap(0.36, sideL + 0.16, -sideX, -0.2);
+  cap(0.36, sideL + 0.16, sideX, -0.2);
+
   return group;
 }
 
@@ -237,10 +342,10 @@ export function updateLanterns(group: THREE.Group, time: number): void {
   group.traverse((obj: THREE.Object3D) => {
     if (obj instanceof THREE.Mesh && obj.userData.lanternGlow) {
       const mat = obj.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 0.55 + Math.sin(time * 1.6) * 0.12;
+      mat.emissiveIntensity = 0.45 + Math.sin(time * 1.6) * 0.1;
     }
     if (obj instanceof THREE.PointLight) {
-      obj.intensity = 0.48 + Math.sin(time * 1.6) * 0.08;
+      obj.intensity = 0.36 + Math.sin(time * 1.6) * 0.06;
     }
   });
 }
@@ -257,12 +362,15 @@ function hashFromId(id: string): number {
 export function scatterGravel(seed: number): THREE.Group {
   const group = new THREE.Group();
   const rng = mulberry32(seed ^ 0x61c88647);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x9a917e, roughness: 1 });
-  for (let i = 0; i < 40; i++) {
-    const pebble = new THREE.Mesh(new THREE.DodecahedronGeometry(randRange(rng, 0.04, 0.09), 0), mat);
-    const angle = rng() * Math.PI * 2;
-    const rad = 7.4 + rng() * 4;
-    pebble.position.set(Math.cos(angle) * rad, -0.02, Math.sin(angle) * rad);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x9a968c, roughness: 1 });
+  for (let i = 0; i < 28; i++) {
+    const pebble = new THREE.Mesh(new THREE.DodecahedronGeometry(randRange(rng, 0.035, 0.08), 0), mat);
+    const side = rng() > 0.5 ? 1 : -1;
+    pebble.position.set(
+      side * (GARDEN.width / 2 + 1.6 + rng() * 2.4),
+      -0.03,
+      randRange(rng, -GARDEN.depth / 2 - 0.4, GARDEN.depth / 2 + 1.2),
+    );
     pebble.rotation.set(rng(), rng(), rng());
     group.add(pebble);
   }

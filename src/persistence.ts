@@ -1,4 +1,4 @@
-import { MUTE_KEY, STORAGE_KEY, type GardenSave } from "./types";
+import { STORAGE_KEY, type GardenSave } from "./types";
 
 export function loadSave(): GardenSave | null {
   try {
@@ -36,18 +36,3 @@ export function clearSave(): void {
   }
 }
 
-export function loadMuted(): boolean {
-  try {
-    return localStorage.getItem(MUTE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function writeMuted(muted: boolean): void {
-  try {
-    localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-}

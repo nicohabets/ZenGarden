@@ -66,14 +66,14 @@ test.describe("Zen Garden", () => {
     const placed = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
       const spots: Array<[number, number]> = [
+        [0, 2.35],
+        [1.4, 2.2],
+        [-1.2, 2.25],
         [2.15, -1.35],
         [-2.4, 2.1],
         [3.2, 2.4],
         [-3.1, -2.2],
         [0.8, 3.0],
-        [-0.6, -3.1],
-        [1.6, 1.8],
-        [-1.8, -0.4],
       ];
       return spots.some(([x, z]) => api.placeStoneAt(x, z));
     });
@@ -177,17 +177,21 @@ test.describe("Zen Garden", () => {
       return {
         stats: api.getStoneStats(),
         foliage: api.getFoliageCount(),
+        moss: api.getMossCount(),
         stones: save?.stones ?? [],
       };
     });
 
-    expect(layout.stats.count).toBeGreaterThanOrEqual(5);
-    expect(layout.stats.clustered).toBeGreaterThanOrEqual(5);
+    expect(layout.stats.count).toBe(15);
+    expect(layout.stats.clustered).toBe(15);
+    expect(layout.stats.clusterSizes).toEqual([5, 3, 3, 3, 1]);
+    expect(layout.stats.clusterSizes.every((n) => n % 2 === 1)).toBe(true);
     expect(layout.stats.tilted).toBeGreaterThanOrEqual(4);
     expect(layout.stats.minDist).toBeGreaterThan(0.55);
     expect(layout.stats.minDist).toBeLessThan(1.35);
     expect(layout.stats.scaleMax / Math.max(0.01, layout.stats.scaleMin)).toBeGreaterThan(1.35);
     expect(layout.foliage).toBeGreaterThan(18);
+    expect(layout.moss).toBe(5);
     expect(layout.stones.some((s) => typeof s.tiltX === "number" && typeof s.tiltZ === "number")).toBe(true);
     expect(layout.stones.some((s) => s.cluster === 0)).toBe(true);
 
@@ -195,5 +199,83 @@ test.describe("Zen Garden", () => {
     expect(stored).toBeTruthy();
     expect(stored!).toContain('"tiltX"');
     expect(stored!).toContain('"cluster"');
+  });
+
+  test("gravel is pale and rake can curve, circle, or cut straight", async ({ page }) => {
+    await page.goto("/");
+    await waitForGarden(page);
+    await page.evaluate(() => window.__ZEN_GARDEN__!.plantSeed(3596739839));
+    await expect(page.getByTestId("mute-btn")).toHaveCount(0);
+
+    const look = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const save = api.getSave();
+      const group = (save?.stones ?? []).filter((s) => s.cluster === 0);
+      const cx = group.reduce((s, t) => s + t.x, 0) / group.length;
+      const cz = group.reduce((s, t) => s + t.z, 0) / group.length;
+      const moss = (save?.moss ?? []).find((m) => Math.hypot(m.x - cx, m.z - cz) < 0.85);
+      const innerR = (moss?.scale ?? 1) * 0.48;
+      const ringR = innerR + 0.165 * 2;
+      return {
+        tone: api.getSandTone(),
+        ring: api.sampleArcDeviation(cx, cz, ringR),
+        cx,
+        cz,
+        ringR,
+      };
+    });
+    expect(look.tone.luma).toBeGreaterThan(150);
+    expect(look.tone.r - look.tone.b).toBeLessThan(40);
+    expect(look.ring).toBeLessThan(2.8);
+
+    const curved = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i <= 22; i++) {
+        const a = Math.PI * 0.12 + (i / 22) * Math.PI * 0.85;
+        pts.push([-1.7 + Math.cos(a) * 1.4, 2.32 + Math.sin(a) * 1.4]);
+      }
+      return {
+        mode: api.rakeStroke(pts),
+        alongArc: api.sampleArcDeviation(-1.7, 2.32, 1.4, Math.PI * 0.12, Math.PI * 0.97),
+      };
+    });
+    expect(curved.mode).toBe("curve");
+    expect(curved.alongArc).toBeLessThan(3.5);
+
+    const circled = await page.evaluate((center) => {
+      const api = window.__ZEN_GARDEN__!;
+      const pts: Array<[number, number]> = [];
+      const r = 1.22;
+      for (let i = 0; i <= 30; i++) {
+        const a = (i / 30) * Math.PI * 1.45;
+        const jitter = Math.sin(i * 1.7) * 0.1;
+        pts.push([center.cx + Math.cos(a) * (r + jitter), center.cz + Math.sin(a) * (r + jitter)]);
+      }
+      return {
+        mode: api.rakeStroke(pts),
+        round: api.sampleArcDeviation(center.cx, center.cz, r, 0, Math.PI * 1.4),
+      };
+    }, { cx: look.cx, cz: look.cz });
+    expect(circled.mode).toBe("circle");
+    expect(circled.round).toBeLessThan(2.4);
+
+    const straight = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        pts.push([-3.4 + t * 6.4, 2.16 + Math.sin(t * 9) * 0.05]);
+      }
+      return {
+        mode: api.rakeStroke(pts),
+        line: api.sampleGrooveDeviation(-3.4, 2.16, 3.0, 2.16),
+      };
+    });
+    expect(straight.mode).toBe("straight");
+    expect(straight.line).toBeLessThan(1.8);
+
+    await page.getByTestId("tool-rake").click();
+    await expect(page.getByTestId("hint")).toContainText(/circle a stone/i);
   });
 });
