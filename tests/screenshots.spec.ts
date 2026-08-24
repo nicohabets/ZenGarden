@@ -17,6 +17,7 @@ test.describe("screenshots", () => {
     await page.waitForFunction(() => window.__ZEN_GARDEN__?.ready === true);
     await page.evaluate((seed) => window.__ZEN_GARDEN__!.plantSeed(seed), SHOT_SEED);
     await page.waitForFunction((seed) => window.__ZEN_GARDEN__?.getSeed() === seed, SHOT_SEED);
+    await page.evaluate(() => window.__ZEN_GARDEN__!.rakeFromTo(-4.1, 2.12, 3.5, 2.12));
     await page.waitForTimeout(1400);
 
     const shots = [

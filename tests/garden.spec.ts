@@ -201,30 +201,77 @@ test.describe("Zen Garden", () => {
     expect(stored!).toContain('"cluster"');
   });
 
-  test("gravel is pale and rake strokes stay linear", async ({ page }) => {
+  test("gravel is pale and rake can curve, circle, or cut straight", async ({ page }) => {
     await page.goto("/");
     await waitForGarden(page);
     await page.evaluate(() => window.__ZEN_GARDEN__!.plantSeed(3596739839));
+    await expect(page.getByTestId("mute-btn")).toHaveCount(0);
 
-    const before = await page.evaluate(() => {
+    const look = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
+      const save = api.getSave();
+      const group = (save?.stones ?? []).filter((s) => s.cluster === 0);
+      const cx = group.reduce((s, t) => s + t.x, 0) / group.length;
+      const cz = group.reduce((s, t) => s + t.z, 0) / group.length;
       return {
         tone: api.getSandTone(),
-        parallel: api.sampleGrooveDeviation(-3.4, 2.2, 3.4, 2.2),
+        ring: api.sampleArcDeviation(cx, cz, 1.15),
+        cx,
+        cz,
       };
     });
-    expect(before.tone.luma).toBeGreaterThan(150);
-    expect(before.tone.r - before.tone.b).toBeLessThan(40);
-    expect(before.parallel).toBeLessThan(2.4);
+    expect(look.tone.luma).toBeGreaterThan(150);
+    expect(look.tone.r - look.tone.b).toBeLessThan(40);
+    expect(look.ring).toBeLessThan(2.8);
 
-    const afterRake = await page.evaluate(() => {
+    const curved = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
-      api.rakeFromTo(-3.3, 2.18, 3.3, 2.18);
-      return api.sampleGrooveDeviation(-3.3, 2.18, 3.3, 2.18);
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i <= 22; i++) {
+        const a = Math.PI * 0.12 + (i / 22) * Math.PI * 0.85;
+        pts.push([-1.7 + Math.cos(a) * 1.4, 2.32 + Math.sin(a) * 1.4]);
+      }
+      return {
+        mode: api.rakeStroke(pts),
+        chord: api.sampleGrooveDeviation(-1.7 + Math.cos(Math.PI * 0.12) * 1.4, 2.32, -1.7 + Math.cos(Math.PI * 0.97) * 1.4, 2.32),
+      };
     });
-    expect(afterRake).toBeLessThan(1.6);
+    expect(curved.mode).toBe("curve");
+    expect(curved.chord).toBeGreaterThan(2.2);
+
+    const circled = await page.evaluate((center) => {
+      const api = window.__ZEN_GARDEN__!;
+      const pts: Array<[number, number]> = [];
+      const r = 1.22;
+      for (let i = 0; i <= 30; i++) {
+        const a = (i / 30) * Math.PI * 1.45;
+        const jitter = Math.sin(i * 1.7) * 0.1;
+        pts.push([center.cx + Math.cos(a) * (r + jitter), center.cz + Math.sin(a) * (r + jitter)]);
+      }
+      return {
+        mode: api.rakeStroke(pts),
+        round: api.sampleArcDeviation(center.cx, center.cz, r, 0, Math.PI * 1.4),
+      };
+    }, { cx: look.cx, cz: look.cz });
+    expect(circled.mode).toBe("circle");
+    expect(circled.round).toBeLessThan(2.4);
+
+    const straight = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        pts.push([-3.4 + t * 6.4, 2.16 + Math.sin(t * 9) * 0.05]);
+      }
+      return {
+        mode: api.rakeStroke(pts),
+        line: api.sampleGrooveDeviation(-3.4, 2.16, 3.0, 2.16),
+      };
+    });
+    expect(straight.mode).toBe("straight");
+    expect(straight.line).toBeLessThan(1.8);
 
     await page.getByTestId("tool-rake").click();
-    await expect(page.getByTestId("hint")).toContainText(/straight/i);
+    await expect(page.getByTestId("hint")).toContainText(/circle a stone/i);
   });
 });

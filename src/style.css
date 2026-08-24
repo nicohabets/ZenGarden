@@ -137,11 +137,6 @@ h1 {
   stroke-width: 1.4;
 }
 
-#btn-mute svg {
-  fill: currentColor;
-  stroke: none;
-}
-
 .hint {
   position: fixed;
   left: 50%;
@@ -285,10 +280,6 @@ h1 {
 #btn-begin {
   background: var(--active);
   color: #f4eee2;
-}
-
-.mute-label {
-  display: none;
 }
 
 @media (max-width: 720px) {

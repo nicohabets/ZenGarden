@@ -3,7 +3,6 @@ import { SEASON_LABEL, TOOL_HINTS, type Season, type ToolId } from "./types";
 export class GardenUI {
   readonly toolbar: HTMLElement;
   readonly hint: HTMLElement;
-  readonly muteBtn: HTMLButtonElement;
   readonly newBtn: HTMLButtonElement;
   readonly dialog: HTMLElement;
   readonly keepBtn: HTMLButtonElement;
@@ -19,7 +18,6 @@ export class GardenUI {
     this.app = must("#app");
     this.toolbar = must("#toolbar");
     this.hint = must("#hint");
-    this.muteBtn = must<HTMLButtonElement>("#btn-mute");
     this.newBtn = must<HTMLButtonElement>("#btn-new");
     this.dialog = must("#new-dialog");
     this.keepBtn = must<HTMLButtonElement>("#btn-keep");
@@ -36,13 +34,6 @@ export class GardenUI {
       btn.setAttribute("aria-pressed", btn.dataset.tool === tool ? "true" : "false");
     }
     this.hint.textContent = TOOL_HINTS[tool];
-  }
-
-  setMuted(muted: boolean): void {
-    this.muteBtn.dataset.muted = muted ? "true" : "false";
-    this.muteBtn.setAttribute("aria-pressed", muted ? "true" : "false");
-    this.muteBtn.setAttribute("aria-label", muted ? "Unmute ambient sound" : "Mute ambient sound");
-    this.muteBtn.querySelector(".mute-label")!.textContent = muted ? "Sound off" : "Sound on";
   }
 
   setSeed(seed: number): void {

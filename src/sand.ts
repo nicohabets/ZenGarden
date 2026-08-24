@@ -125,17 +125,41 @@ export class SandField {
     this.markDirty();
   }
 
-  paintRing(wx: number, wz: number, radiusWorld: number, tineGap = 0.2): void {
-    const c = this.worldToUv(wx, wz);
-    const maxR = (radiusWorld / GARDEN.width) * TEX_W;
-    const gap = (tineGap / GARDEN.width) * TEX_W;
+  rakeArc(
+    cx: number,
+    cz: number,
+    radius: number,
+    a0: number,
+    a1: number,
+    blockers: Blocker[],
+  ): void {
+    const sweep = a1 - a0;
+    if (Math.abs(sweep) < 0.008 || radius < 0.12) return;
+    const steps = Math.max(3, Math.ceil(radius * Math.abs(sweep) * 18));
+    const tines = 7;
+    const spacing = 0.055;
     const ctx = this.ctx;
-    const sides = 16;
     ctx.lineCap = "butt";
     ctx.lineJoin = "miter";
-    for (let r = gap * 1.55; r < maxR; r += gap * 1.75) {
-      this.strokePolygon(c.u, c.v, r, sides, "rgba(78, 76, 70, 0.2)", 2);
-      this.strokePolygon(c.u, c.v, r + 1.7, sides, "rgba(255, 252, 246, 0.12)", 1);
+
+    for (let t = 0; t < tines; t++) {
+      const center = (tines - 1) / 2;
+      const r = radius + (t - center) * spacing;
+      if (r < 0.1) continue;
+      const depth = 1 - Math.abs(t - center) / (center + 0.01);
+      this.strokeWorldArc(cx, cz, r, a0, a1, steps, blockers, `rgba(70, 68, 62, ${0.2 + depth * 0.2})`, 1.35 + depth * 1.35);
+      this.strokeWorldArc(cx, cz, r + 0.018, a0, a1, steps, blockers, `rgba(252, 250, 244, ${0.1 + depth * 0.12})`, 0.95);
+    }
+    this.markDirty();
+  }
+
+  paintRing(wx: number, wz: number, radiusWorld: number, innerWorld = 0.42, tineGap = 0.165): void {
+    const ctx = this.ctx;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    for (let r = innerWorld + tineGap; r < radiusWorld; r += tineGap) {
+      this.strokeWorldCircle(wx, wz, r, "rgba(70, 68, 62, 0.26)", 2.15);
+      this.strokeWorldCircle(wx, wz, r + 0.02, "rgba(255, 252, 246, 0.13)", 1);
     }
     this.markDirty();
   }
@@ -228,6 +252,40 @@ export class SandField {
     return Math.sqrt(variance);
   }
 
+  sampleArcDeviation(cx: number, cz: number, radius: number, a0 = 0, a1 = Math.PI * 2): number {
+    this.flush();
+    const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
+    const steps = 36;
+    const radii: number[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      const px = cx + Math.cos(a) * radius;
+      const pz = cz + Math.sin(a) * radius;
+      const uv = this.worldToUv(px, pz);
+      const inward = this.worldToUv(cx + Math.cos(a) * (radius - 0.2), cz + Math.sin(a) * (radius - 0.2));
+      const nx = uv.u - inward.u;
+      const ny = uv.v - inward.v;
+      const nlen = Math.hypot(nx, ny) || 1;
+      let best = 0;
+      let bestDark = 999;
+      for (let o = -10; o <= 10; o++) {
+        const x = Math.round(uv.u + (nx / nlen) * o);
+        const y = Math.round(uv.v + (ny / nlen) * o);
+        if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
+        const idx = (y * TEX_W + x) * 4;
+        const luma = img.data[idx] * 0.3 + img.data[idx + 1] * 0.59 + img.data[idx + 2] * 0.11;
+        if (luma < bestDark) {
+          bestDark = luma;
+          best = o;
+        }
+      }
+      radii.push(best);
+    }
+    const mean = radii.reduce((s, v) => s + v, 0) / radii.length;
+    const variance = radii.reduce((s, v) => s + (v - mean) ** 2, 0) / radii.length;
+    return Math.sqrt(variance);
+  }
+
   exportDataUrl(): string {
     this.flush();
     return this.canvas.toDataURL("image/jpeg", 0.72);
@@ -252,19 +310,43 @@ export class SandField {
     this.dirty = false;
   }
 
-  private strokePolygon(cx: number, cy: number, radius: number, sides: number, color: string, width: number): void {
+  private strokeWorldCircle(wx: number, wz: number, radius: number, color: string, width: number): void {
+    this.strokeWorldArc(wx, wz, radius, 0, Math.PI * 2, Math.max(40, Math.ceil(radius * 42)), [], color, width);
+  }
+
+  private strokeWorldArc(
+    cx: number,
+    cz: number,
+    radius: number,
+    a0: number,
+    a1: number,
+    steps: number,
+    blockers: Blocker[],
+    color: string,
+    width: number,
+  ): void {
     const ctx = this.ctx;
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
-    ctx.beginPath();
-    for (let i = 0; i <= sides; i++) {
-      const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+    let drawing = false;
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
       const x = cx + Math.cos(a) * radius;
-      const y = cy + Math.sin(a) * radius;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      const z = cz + Math.sin(a) * radius;
+      if (!this.clearOfBlockers(x, z, blockers)) {
+        drawing = false;
+        continue;
+      }
+      const uv = this.worldToUv(x, z);
+      if (!drawing) {
+        ctx.beginPath();
+        ctx.moveTo(uv.u, uv.v);
+        drawing = true;
+      } else {
+        ctx.lineTo(uv.u, uv.v);
+      }
     }
-    ctx.stroke();
+    if (drawing) ctx.stroke();
   }
 
   private markDirty(): void {

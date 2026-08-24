@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import { AmbientAudio } from "./audio";
 import { Bonsai } from "./bonsai";
 import { CameraRig } from "./camera";
 import { generateWorld, inBounds, nextStoneId } from "./generate";
-import { loadMuted, loadSave, writeMuted, writeSave } from "./persistence";
+import { loadSave, writeSave } from "./persistence";
+import { RakeGuide, type RakeIsland, type RakePiece } from "./rake";
 import { SandField } from "./sand";
 import {
   createBackdrop,
@@ -25,6 +25,7 @@ import {
   type GardenSave,
   type LanternState,
   type MossState,
+  type RakeMode,
   type StoneState,
   type ToolId,
   type ZenGardenAPI,
@@ -51,8 +52,8 @@ export class ZenGarden {
 
   private readonly cam = new CameraRig();
   private readonly ui = new GardenUI();
-  private readonly audio: AmbientAudio;
   private readonly sand: SandField;
+  private readonly rakeGuide = new RakeGuide();
   private readonly stones = new StoneField();
 
   private seed: number;
@@ -69,14 +70,10 @@ export class ZenGarden {
   private waterTime = 0;
 
   private mode: "idle" | "rake" | "orbit" | "pan" | "pinch" | "drag-stone" | "drag-bonsai" = "idle";
-  private lastSand: { x: number; z: number } | null = null;
-  private rakeOrigin: { x: number; z: number } | null = null;
-  private rakeDir: { x: number; z: number } | null = null;
   private lastPointer: Pointer | null = null;
   private pinchDist = 0;
   private dragId: string | null = null;
   private saveTimer = 0;
-  private rakeSoundAt = 0;
   private disposed = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -97,7 +94,6 @@ export class ZenGarden {
     this.scene.background = new THREE.Color(0xd6d2ca);
     this.scene.fog = new THREE.Fog(0xd6d2ca, 26, 52);
 
-    this.audio = new AmbientAudio(loadMuted());
     this.sand = new SandField();
     this.seed = freshSeed();
 
@@ -121,7 +117,6 @@ export class ZenGarden {
       this.plant(freshSeed());
       this.scheduleSave(true);
     }
-    this.ui.setMuted(this.audio.muted);
     this.ui.setTool(this.tool);
     this.ui.setSeed(this.seed);
     this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
@@ -147,16 +142,8 @@ export class ZenGarden {
     this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
     this.sand.paintBase(hashSeed(seed));
     this.sand.paintParallel(seed);
-    const raked = new Set<number>();
-    for (const s of world.stones) {
-      if (s.cluster == null || raked.has(s.cluster)) continue;
-      raked.add(s.cluster);
-      const members = world.stones.filter((t) => t.cluster === s.cluster);
-      const cx = members.reduce((sum, t) => sum + t.x, 0) / members.length;
-      const cz = members.reduce((sum, t) => sum + t.z, 0) / members.length;
-      let reach = 0.55;
-      for (const t of members) reach = Math.max(reach, Math.hypot(t.x - cx, t.z - cz) + t.scale * 0.35);
-      this.sand.paintRing(cx, cz, reach + 0.45);
+    for (const island of this.rakeIslands()) {
+      this.sand.paintRing(island.x, island.z, island.innerR + 1.15, island.innerR, 0.165);
     }
     this.sand.flush();
     this.ui.setSeed(seed);
@@ -229,12 +216,6 @@ export class ZenGarden {
 
   private bindUi(): void {
     this.ui.onToolClick((tool) => this.setTool(tool));
-    this.ui.muteBtn.addEventListener("click", () => {
-      this.audio.setMuted(!this.audio.muted);
-      writeMuted(this.audio.muted);
-      this.ui.setMuted(this.audio.muted);
-      void this.audio.ensure();
-    });
     this.ui.newBtn.addEventListener("click", () => this.ui.showNewDialog(true));
     this.ui.keepBtn.addEventListener("click", () => this.ui.showNewDialog(false));
     this.ui.beginBtn.addEventListener("click", () => {
@@ -281,7 +262,6 @@ export class ZenGarden {
       "5": "place",
     };
     if (map[e.key]) this.setTool(map[e.key]);
-    if (e.key === "m" || e.key === "M") this.ui.muteBtn.click();
     if (e.key === "n" || e.key === "N") this.ui.showNewDialog(true);
     if (e.key === "Escape") this.ui.showNewDialog(false);
   }
@@ -299,7 +279,6 @@ export class ZenGarden {
   }
 
   private onDown(e: PointerEvent): void {
-    void this.audio.ensure();
     this.canvas.setPointerCapture(e.pointerId);
     const p = { id: e.pointerId, x: e.clientX, y: e.clientY, button: e.button };
     this.pointers.set(e.pointerId, p);
@@ -307,7 +286,6 @@ export class ZenGarden {
     if (this.pointers.size === 2) {
       this.mode = "pinch";
       this.pinchDist = this.fingerDistance();
-      this.lastSand = null;
       return;
     }
 
@@ -327,9 +305,7 @@ export class ZenGarden {
 
     if (this.tool === "rake" && (hit.kind === "sand" || hit.kind === "moss")) {
       this.mode = "rake";
-      this.lastSand = { x: hit.x, z: hit.z };
-      this.rakeOrigin = { x: hit.x, z: hit.z };
-      this.rakeDir = null;
+      this.rakeGuide.begin(hit.x, hit.z);
       return;
     }
     if (this.tool === "stone" && hit.kind === "stone" && hit.id) {
@@ -392,17 +368,8 @@ export class ZenGarden {
     const sand = this.groundPoint(e.clientX, e.clientY);
     if (!sand) return;
 
-    if (this.mode === "rake" && this.lastSand && this.rakeOrigin) {
-      const next = this.snapRakePoint(sand.x, sand.z);
-      if (next) {
-        this.sand.rake(this.lastSand.x, this.lastSand.z, next.x, next.z, this.blockers());
-        this.lastSand = next;
-        const now = performance.now();
-        if (now - this.rakeSoundAt > 90) {
-          this.audio.rakeTick();
-          this.rakeSoundAt = now;
-        }
-      }
+    if (this.mode === "rake") {
+      this.applyRake(this.rakeGuide.feed(sand.x, sand.z, this.rakeIslands()));
       return;
     }
     if (this.mode === "drag-stone" && this.dragId && inBounds(sand.x, sand.z, 0.7)) {
@@ -426,9 +393,7 @@ export class ZenGarden {
       this.scheduleSave();
     }
     this.mode = this.pointers.size >= 2 ? "pinch" : "idle";
-    this.lastSand = null;
-    this.rakeOrigin = null;
-    this.rakeDir = null;
+    this.rakeGuide.reset();
     this.dragId = null;
     this.lastPointer = null;
     try {
@@ -470,6 +435,7 @@ export class ZenGarden {
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });
     for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.32 + s.scale * 0.18 });
+    for (const m of this.mossStates) list.push({ x: m.x, z: m.z, r: m.scale * 0.46 });
     return list;
   }
 
@@ -606,29 +572,56 @@ export class ZenGarden {
         this.sand.rake(x1, z1, x2, z2, this.blockers());
         this.sand.flush();
       },
+      rakeStroke: (points) => this.playRakeStroke(points),
       sampleGrooveDeviation: (x1, z1, x2, z2) => this.sand.sampleGrooveDeviation(x1, z1, x2, z2),
+      sampleArcDeviation: (cx, cz, radius, a0, a1) => this.sand.sampleArcDeviation(cx, cz, radius, a0, a1),
       getSandTone: () => this.sand.getSandTone(),
       getMossCount: () => this.mossStates.length,
     };
     window.__ZEN_GARDEN__ = api;
   }
 
-  private snapRakePoint(x: number, z: number): { x: number; z: number } | null {
-    const origin = this.rakeOrigin;
-    if (!origin) return null;
-    if (!this.rakeDir) {
-      const dx = x - origin.x;
-      const dz = z - origin.z;
-      const len = Math.hypot(dx, dz);
-      if (len < 0.16) return null;
-      const step = Math.PI / 12;
-      const snapped = Math.round(Math.atan2(dz, dx) / step) * step;
-      this.rakeDir = { x: Math.cos(snapped), z: Math.sin(snapped) };
+  private playRakeStroke(points: Array<[number, number]>): RakeMode {
+    if (points.length < 2) return "pending";
+    const guide = new RakeGuide();
+    guide.begin(points[0][0], points[0][1]);
+    const islands = this.rakeIslands();
+    for (let i = 1; i < points.length; i++) {
+      this.applyRake(guide.feed(points[i][0], points[i][1], islands));
     }
-    const t = (x - origin.x) * this.rakeDir.x + (z - origin.z) * this.rakeDir.z;
-    const next = { x: origin.x + this.rakeDir.x * t, z: origin.z + this.rakeDir.z * t };
-    if (!inBounds(next.x, next.z, 0.12)) return null;
-    return next;
+    this.sand.flush();
+    return guide.mode;
+  }
+
+  private applyRake(piece: RakePiece | null): void {
+    if (!piece) return;
+    const blockers = this.blockers();
+    if (piece.kind === "arc") {
+      this.sand.rakeArc(piece.cx, piece.cz, piece.radius, piece.a0, piece.a1, blockers);
+      return;
+    }
+    this.sand.rake(piece.from.x, piece.from.z, piece.to.x, piece.to.z, blockers);
+  }
+
+  private rakeIslands(): RakeIsland[] {
+    const by = new Map<number, StoneState[]>();
+    for (const s of this.stones.stones) {
+      if (s.cluster == null) continue;
+      const list = by.get(s.cluster) ?? [];
+      list.push(s);
+      by.set(s.cluster, list);
+    }
+    const islands: RakeIsland[] = [];
+    for (const members of by.values()) {
+      const x = members.reduce((s, m) => s + m.x, 0) / members.length;
+      const z = members.reduce((s, m) => s + m.z, 0) / members.length;
+      const moss = this.mossStates.find((m) => Math.hypot(m.x - x, m.z - z) < 0.85);
+      let reach = 0.35;
+      for (const m of members) reach = Math.max(reach, Math.hypot(m.x - x, m.z - z) + m.scale * 0.22);
+      const innerR = moss ? moss.scale * 0.48 : reach * 0.7;
+      islands.push({ x, z, innerR, outerR: innerR + 2.35 });
+    }
+    return islands;
   }
 }
 

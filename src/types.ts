@@ -112,7 +112,9 @@ export interface ZenGardenAPI {
   getFoliageCount(): number;
   waterBonsai(): Season;
   rakeFromTo(x1: number, z1: number, x2: number, z2: number): void;
+  rakeStroke(points: Array<[number, number]>): RakeMode;
   sampleGrooveDeviation(x1: number, z1: number, x2: number, z2: number): number;
+  sampleArcDeviation(cx: number, cz: number, radius: number, a0?: number, a1?: number): number;
   getSandTone(): SandTone;
   getMossCount(): number;
 }
@@ -123,11 +125,12 @@ export const GARDEN = {
   sandY: 0.02,
 } as const;
 
+export type RakeMode = "pending" | "circle" | "straight" | "curve";
+
 export const STORAGE_KEY = "zengarden.v1";
-export const MUTE_KEY = "zengarden.muted";
 
 export const TOOL_HINTS: Record<ToolId, string> = {
-  rake: "Draw straight grooves through the gravel",
+  rake: "Draw grooves, or circle a stone",
   stone: "Tap empty sand to place · drag a stone to move",
   water: "Water the bonsai — it grows, and the season turns",
   prune: "Tap foliage to prune",

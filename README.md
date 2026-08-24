@@ -1,6 +1,6 @@
 # Zen Garden
 
-A free, calm, isometric 3D zen garden in the spirit of Ryoan-ji: a pale gravel court, odd-numbered ishi-gumi stone groups, and straight rake lines. Place and move stones, and tend a bonsai at the edge of the court. The layout is generated from a seed. Your garden is saved only in this browser — there is no account and no database.
+A free, calm, isometric 3D zen garden in the spirit of Ryoan-ji: a pale gravel court, odd-numbered ishi-gumi stone groups, and concentric rings around moss islands. Place and move stones, and tend a bonsai at the edge of the court. The layout is generated from a seed. Your garden is saved only in this browser — there is no account and no database.
 
 ## Play
 
@@ -18,13 +18,13 @@ Atmosphere: a rectangular white-grey gravel court with weathered granite and bas
 
 Tools:
 
-- **Rake** — draw straight grooves in the gravel
+- **Rake** — draw grooves; circling a stone pulls even rings, a long pull stays straight
 - **Stone** — tap empty sand to place a stone, drag a stone to move it
 - **Water** — tap the bonsai
 - **Prune** — tap foliage (two clusters always remain)
 - **Bonsai** — drag the pot to a new place
 
-**New garden** asks whether to keep the current garden or begin a fresh seeded layout. Ambient sound can be muted. First interaction may start the audio (browser autoplay rules).
+**New garden** asks whether to keep the current garden or begin a fresh seeded layout.
 
 ## Persist
 
@@ -95,4 +95,4 @@ npm run cf:preview
 
 ## Stack
 
-TypeScript, Vite, Three.js. No React, no auth, no server store. The garden is an orthographic (isometric) scene with a rakeable gravel texture (straight comb lines), irregular garden stones, moss islands, a water basin, and a bonsai you can water, prune, and move.
+TypeScript, Vite, Three.js. No React, no auth, no server store. The garden is an orthographic (isometric) scene with a rakeable gravel texture (concentric rings around islands, plus freehand and straight grooves), irregular garden stones, moss islands, a water basin, and a bonsai you can water, prune, and move.
