@@ -43,7 +43,7 @@ export function createCourtBed(): THREE.Mesh {
   const mat = new THREE.MeshLambertMaterial({ color: 0x3a342c });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(GARDEN.width - 0.04, GARDEN.depth - 0.04), mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = GARDEN.sandY - 0.01;
+  mesh.position.y = GARDEN.sandY - 0.05;
   mesh.receiveShadow = false;
   mesh.userData.kind = "sand";
   return mesh;

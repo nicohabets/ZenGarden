@@ -86,7 +86,7 @@ export class GrainCloud {
     const px = Math.max(1, viewH);
     const targetPx = close ? 14 : cam.zoom < 2.2 ? 16 : 20;
     const screenWorld = (targetPx * cam.zoom) / px;
-    const worldSize = Math.max(spacing * 1.38, screenWorld);
+    const worldSize = Math.max(spacing * (close ? 1.62 : 1.4), screenWorld);
 
     let n = 0;
     n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.62), 0, 0.18);
@@ -195,7 +195,9 @@ export class GrainCloud {
       const layer = this.layers[i];
       const floor = h * SAND_HEIGHT_GAIN;
       const pile = h > 0.002 ? visualHeight(h) : 0;
-      const y = GARDEN.sandY + floor + pile + worldSize * 0.42 + layer * LAYER_H;
+      // Troughs sit lower, but never under the court bed — that read as a bare slab.
+      const lift = Math.max(floor + pile, -0.01);
+      const y = GARDEN.sandY + lift + worldSize * 0.42 + layer * LAYER_H;
       const s = worldSize * (0.82 + seed * 0.28);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
