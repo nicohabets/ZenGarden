@@ -1,22 +1,30 @@
 import * as THREE from "three";
 import type { CameraState } from "./types";
 
-const ISO_ELEVATION = Math.atan(1 / Math.SQRT2);
-const MIN_ELEV = 0.42;
-const MAX_ELEV = 1.18;
-const MIN_ZOOM = 6.2;
-const MAX_ZOOM = 18;
+/** Closest look-across angle — almost standing in the court. */
+export const MIN_ELEV = 0.18;
+export const MAX_ELEV = 1.12;
+/** Frustum height in world units. Smaller = closer. Grain scale is ~0.5. */
+export const MIN_ZOOM = 0.38;
+export const MAX_ZOOM = 16;
+export const DEFAULT_ZOOM = 3.15;
+export const DEFAULT_ELEV = 0.32;
+export const CAMERA_NEAR = 0.016;
+export const CAMERA_FAR = 72;
+const TARGET_Y = 0.045;
+const MIN_RADIUS = 2.8;
+const MAX_RADIUS = 20;
 
 export class CameraRig {
   readonly camera: THREE.OrthographicCamera;
-  readonly target = new THREE.Vector3(0, 0.15, 0);
+  readonly target = new THREE.Vector3(0, TARGET_Y, 0.12);
   azimuth = Math.PI / 4;
-  elevation = ISO_ELEVATION;
-  zoom = 14;
+  elevation = DEFAULT_ELEV;
+  zoom = DEFAULT_ZOOM;
   aspect = 1;
 
   constructor() {
-    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.2, 90);
+    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, CAMERA_NEAR, CAMERA_FAR);
     this.sync();
   }
 
@@ -43,7 +51,8 @@ export class CameraRig {
   }
 
   dolly(delta: number): void {
-    this.zoom = THREE.MathUtils.clamp(this.zoom * (1 + delta), MIN_ZOOM, MAX_ZOOM);
+    const next = this.zoom * (1 + delta);
+    this.zoom = THREE.MathUtils.clamp(next, MIN_ZOOM, MAX_ZOOM);
     this.sync();
   }
 
@@ -51,7 +60,7 @@ export class CameraRig {
     this.azimuth = state.azimuth;
     this.elevation = THREE.MathUtils.clamp(state.elevation, MIN_ELEV, MAX_ELEV);
     this.zoom = THREE.MathUtils.clamp(state.zoom, MIN_ZOOM, MAX_ZOOM);
-    this.target.set(state.tx, 0.15, state.tz);
+    this.target.set(state.tx, TARGET_Y, state.tz);
     this.sync();
   }
 
@@ -66,7 +75,7 @@ export class CameraRig {
   }
 
   sync(): void {
-    const radius = 22;
+    const radius = this.orbitRadius();
     const cosE = Math.cos(this.elevation);
     this.camera.position.set(
       this.target.x + radius * cosE * Math.sin(this.azimuth),
@@ -74,6 +83,8 @@ export class CameraRig {
       this.target.z + radius * cosE * Math.cos(this.azimuth),
     );
     this.camera.lookAt(this.target);
+    this.camera.near = CAMERA_NEAR;
+    this.camera.far = CAMERA_FAR;
     const h = this.zoom;
     const w = this.zoom * this.aspect;
     this.camera.left = -w / 2;
@@ -82,4 +93,10 @@ export class CameraRig {
     this.camera.bottom = -h / 2;
     this.camera.updateProjectionMatrix();
   }
+
+  private orbitRadius(): number {
+    const t = THREE.MathUtils.smoothstep(MIN_ZOOM, MAX_ZOOM, this.zoom);
+    return THREE.MathUtils.lerp(MIN_RADIUS, MAX_RADIUS, t);
+  }
 }
+
