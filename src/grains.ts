@@ -77,7 +77,7 @@ export class GrainCloud {
     const z1 = Math.min(GARDEN.depth / 2 - 0.03, bounds.z1);
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
-    const cellBudget = Math.floor(this.maxCount * 0.4);
+    const cellBudget = Math.floor(this.maxCount * 0.34);
     const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
     const worldSize = THREE.MathUtils.clamp(spacing * 2.15, 0.0014, 0.07);
 
@@ -91,8 +91,8 @@ export class GrainCloud {
         if (keep < 0.08) continue;
         const hx = hash2(row * 19 + 3, col * 11 + 5);
         const hz = hash2(row * 41 + 7, col * 23 + 2);
-        const gx = x + (hx - 0.5) * spacing * 1.65;
-        const gz = z + (hz - 0.5) * spacing * 1.65;
+        const gx = x + (hx - 0.5) * spacing * 1.9;
+        const gz = z + (hz - 0.5) * spacing * 1.9;
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
         const h = sand.sampleVisual(gx, gz);
@@ -110,7 +110,8 @@ export class GrainCloud {
     }
 
     const surface = n;
-    for (let i = 0; i < surface && n < this.maxCount; i++) {
+    const stackCap = Math.floor(this.maxCount * 0.76);
+    for (let i = 0; i < surface && n < stackCap; i++) {
       const h = this.hs[i];
       if (h < 0.003) continue;
       const stacks = h > 0.02 ? 18 : h > 0.012 ? 13 : h > 0.007 ? 9 : 5;
@@ -125,7 +126,7 @@ export class GrainCloud {
         px /= plen;
         pz /= plen;
       }
-      for (let layer = 1; layer <= stacks && n < this.maxCount; layer++) {
+      for (let layer = 1; layer <= stacks && n < stackCap; layer++) {
         const seed = hash2(i + 19 + layer * 7, 23);
         const slump = layer * SLUMP;
         const wobble = (seed - 0.5) * 0.012;
@@ -139,6 +140,26 @@ export class GrainCloud {
         );
       }
     }
+
+    sand.forEachBank(x0, z0, x1, z1, Math.max(0.02, spacing * 1.2), (x, z, tx, tz, h) => {
+      if (n >= this.maxCount) return;
+      if (blocked(x, z, blockers)) return;
+      const seed = hash2((x * 73) | 0, (z * 91) | 0);
+      n = this.pushGrain(n, x + (seed - 0.5) * 0.012, z + (hash2((z * 91) | 0, 5) - 0.5) * 0.012, h, seed, 0);
+      const nx = -tz;
+      const nz = tx;
+      for (let layer = 1; layer <= 7 && n < this.maxCount; layer++) {
+        const s = hash2(((x * 41) | 0) + layer, ((z * 37) | 0) + 11);
+        n = this.pushGrain(
+          n,
+          x + nx * layer * SLUMP * 0.5 + (s - 0.5) * 0.014,
+          z + nz * layer * SLUMP * 0.5 + (hash2(layer + 3, 19) - 0.5) * 0.014,
+          h,
+          s,
+          layer,
+        );
+      }
+    });
 
     this.count = n;
     this.mesh.count = n;

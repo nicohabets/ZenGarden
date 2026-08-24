@@ -189,6 +189,63 @@ export class SandField {
     return mark;
   }
 
+  /** Walk tine crests so grit can pile along the same lines the rake carved. */
+  forEachBank(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    step: number,
+    fn: (x: number, z: number, alongX: number, alongZ: number, h: number) => void,
+  ): void {
+    const ds = Math.max(0.016, step);
+    for (let i = 0; i < this.marks.length; i++) {
+      const m = this.marks[i];
+      const offs = ridgeOffsets(m.multi);
+      const h = m.depth * 0.62;
+      if (m.kind === "seg") {
+        const dx = m.bx - m.ax;
+        const dz = m.bz - m.az;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.04) continue;
+        const tx = dx / len;
+        const tz = dz / len;
+        const nx = -tz;
+        const nz = tx;
+        for (let t = 0; t <= len; t += ds) {
+          const px = m.ax + tx * t;
+          const pz = m.az + tz * t;
+          for (let k = 0; k < offs.length; k++) {
+            const x = px + nx * offs[k];
+            const z = pz + nz * offs[k];
+            if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+            fn(x, z, tx, tz, h);
+          }
+        }
+        continue;
+      }
+      let sweep = m.a1 - m.a0;
+      while (sweep > Math.PI * 2) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI * 2) sweep += Math.PI * 2;
+      const da = ds / Math.max(0.12, m.r);
+      const dir = sweep >= 0 ? 1 : -1;
+      for (let a = 0; a <= Math.abs(sweep) + 1e-6; a += da) {
+        const ang = m.a0 + dir * a;
+        const ca = Math.cos(ang);
+        const sa = Math.sin(ang);
+        const tx = -sa;
+        const tz = ca;
+        for (let k = 0; k < offs.length; k++) {
+          const r = m.r + offs[k];
+          const x = m.cx + ca * r;
+          const z = m.cz + sa * r;
+          if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+          fn(x, z, tx, tz, h);
+        }
+      }
+    }
+  }
+
   getSandVolume(): number {
     let sum = 0;
     for (let i = 0; i < this.height.length; i++) sum += this.height[i];
@@ -861,6 +918,17 @@ function markDelta(mark: RakeMark, x: number, z: number): number {
   const sweep = mark.a1 - mark.a0;
   if (!angleInSweep(Math.atan2(dz, dx), mark.a0, sweep)) return 0;
   return (mark.multi ? tineProfile(across) : singleTine(across)) * mark.depth;
+}
+
+function ridgeOffsets(multi: boolean): number[] {
+  if (!multi) return [RIDGE_OFF, -RIDGE_OFF];
+  const out: number[] = [];
+  const center = (TINES - 1) / 2;
+  for (let t = 0; t < TINES; t++) {
+    const mid = (t - center) * TINE_GAP;
+    out.push(mid + RIDGE_OFF, mid - RIDGE_OFF);
+  }
+  return out;
 }
 
 function tineProfile(across: number): number {
