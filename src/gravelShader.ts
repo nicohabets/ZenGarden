@@ -17,7 +17,7 @@ export function applyPackedSandShader(
   heightRange: number,
 ): SandLookUniforms {
   const look: SandLookUniforms = { uZoom: { value: 3.2 } };
-  const steps = wantHighQuality() ? 12 : isMobileGarden() ? 5 : 8;
+  const steps = wantHighQuality() ? 10 : isMobileGarden() ? 4 : 6;
 
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uField = { value: field };

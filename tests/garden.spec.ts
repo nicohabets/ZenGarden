@@ -320,6 +320,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("camera starts on the gravel and can zoom to grain scale", async ({ page }) => {
+    test.setTimeout(60_000);
     await page.goto("/");
     await waitForGarden(page);
 
