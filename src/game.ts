@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import { Bonsai } from "./bonsai";
 import { CameraRig } from "./camera";
-import { isMobileGarden, isSoftwareGL, pixelRatioCap, shadowsEnabled } from "./device";
+import { isMobileGarden, isSoftwareGL, pixelRatioCap, shadowsEnabled, wantHighQuality } from "./device";
 import { generateWorld, inBounds, nextStoneId } from "./generate";
 import { FrameMeter } from "./perf";
 import { loadSave, writeSave } from "./persistence";
 import { RakeGuide, type RakeIsland, type RakePiece } from "./rake";
 import { SandField } from "./sand";
 import {
+  createApron,
   createBackdrop,
   createBasin,
   createFrame,
@@ -91,7 +92,7 @@ export class ZenGarden {
     this.useShadows = shadowsEnabled(this.softwareGL);
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: !isMobileGarden() && !this.softwareGL,
+      antialias: wantHighQuality() || (!isMobileGarden() && !this.softwareGL),
       alpha: false,
       powerPreference: "high-performance",
     });
@@ -100,17 +101,18 @@ export class ZenGarden {
     this.renderer.shadowMap.enabled = this.useShadows;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.22;
+    this.renderer.toneMappingExposure = wantHighQuality() ? 1.32 : 1.26;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.background = new THREE.Color(0xcfc9be);
-    this.scene.fog = new THREE.Fog(0xcfc9be, 18, 46);
+    this.scene.background = new THREE.Color(0xddd6c8);
+    this.scene.fog = new THREE.Fog(0xddd6c8, 24, 56);
 
     this.sand = new SandField();
     this.seed = freshSeed();
 
     this.lights();
     this.scene.add(createGround());
+    this.scene.add(createApron());
     this.scene.add(createFrame());
     this.scene.add(createBackdrop());
     this.scene.add(this.sand.mesh);
@@ -160,7 +162,7 @@ export class ZenGarden {
       this.sand.paintRing(island.x, island.z, island.innerR + 1.15, island.innerR, 0.165);
     }
     this.sand.embedOccupants(this.occupants());
-    this.sand.settle(6);
+    this.sand.settle(14);
     this.sand.flush();
     this.settleOccupants();
     this.meter.plantMs = performance.now() - t0;
@@ -211,10 +213,16 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf6f2ea, 0x6a6458, 0.62);
+    const hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a8478, 0.92);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1dc, 1.48);
-    sun.position.set(16.8, 3.7, 7.2);
+    const fill = new THREE.AmbientLight(0xf2ebe0, 0.34);
+    this.scene.add(fill);
+    const bounce = new THREE.DirectionalLight(0xe8e4dc, 0.48);
+    bounce.position.set(-9.2, 6.4, -5.4);
+    bounce.castShadow = false;
+    this.scene.add(bounce);
+    const sun = new THREE.DirectionalLight(0xfff3e2, 1.18);
+    sun.position.set(16.8, 4.4, 7.2);
     sun.castShadow = this.useShadows;
     if (this.useShadows) {
       sun.shadow.mapSize.set(1024, 1024);
@@ -225,7 +233,7 @@ export class ZenGarden {
       sun.shadow.camera.top = 9;
       sun.shadow.camera.bottom = -9;
       sun.shadow.bias = -0.0005;
-      sun.shadow.normalBias = 0.03;
+      sun.shadow.normalBias = 0.04;
     }
     this.scene.add(sun);
   }
@@ -461,7 +469,7 @@ export class ZenGarden {
   private occupants(): { x: number; z: number; r: number; pile?: number; sink?: number }[] {
     const list = [
       ...this.stones.stones.map((s) => ({ x: s.x, z: s.z, r: 0.28 + s.scale * 0.2 })),
-      ...this.mossStates.map((m) => ({ x: m.x, z: m.z, r: m.scale * 0.48, pile: 0.015, sink: 0.012 })),
+      ...this.mossStates.map((m) => ({ x: m.x, z: m.z, r: m.scale * 0.52, pile: 0.02, sink: 0.018 })),
       { x: this.basinState.x, z: this.basinState.z, r: 0.52 },
       { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.6 },
       ...this.lanternStates.map((l) => ({ x: l.x, z: l.z, r: 0.22 })),
@@ -473,7 +481,7 @@ export class ZenGarden {
     this.stones.settleToSand((x, z) => this.sand.sampleHeight(x, z));
     if (this.mossGroup) {
       for (const child of this.mossGroup.children) {
-        child.position.y = GARDEN.sandY + this.sand.sampleHeight(child.position.x, child.position.z) - 0.02;
+        child.position.y = GARDEN.sandY + this.sand.sampleHeight(child.position.x, child.position.z) - 0.05;
       }
     }
     if (this.bonsai) {

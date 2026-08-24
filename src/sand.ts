@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { chooseSimGrid } from "./device";
+import { chooseDisplayGrid, chooseSimGrid } from "./device";
 import { applyGravelShader } from "./gravelShader";
 import { mulberry32 } from "./rng";
 import { GARDEN, type Blocker, type SandTone } from "./types";
@@ -11,13 +11,13 @@ export const HEIGHT_RLE_PREFIX = "hf1r:";
 const H_MIN = -0.086;
 const H_MAX = 0.086;
 const H_RANGE = H_MAX - H_MIN;
-const REPOSE = Math.tan((36 * Math.PI) / 180);
+const REPOSE = Math.tan((28 * Math.PI) / 180);
 const TINES = 5;
-const TINE_GAP = 0.11;
-const TROUGH_SIGMA = 0.028;
-const RIDGE_OFF = 0.052;
-const RIDGE_SIGMA = 0.022;
-const RAKE_DEPTH = 0.046;
+const TINE_GAP = 0.118;
+const TROUGH_SIGMA = 0.042;
+const RIDGE_OFF = 0.06;
+const RIDGE_SIGMA = 0.036;
+const RAKE_DEPTH = 0.04;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
@@ -35,10 +35,6 @@ interface Rect {
   j0: number;
   i1: number;
   j1: number;
-}
-
-function chooseDisplayGrid(sim: { w: number; h: number }): { w: number; h: number } {
-  return { w: sim.w, h: sim.h };
 }
 
 /**
@@ -99,9 +95,9 @@ export class SandField {
     white.colorSpace = THREE.SRGBColorSpace;
 
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xf2eee6,
+      color: 0xf4efe6,
       map: white,
-      roughness: 0.9,
+      roughness: 0.86,
       metalness: 0,
       displacementMap: this.texture,
       displacementScale: H_RANGE,
@@ -219,7 +215,8 @@ export class SandField {
       if (Math.abs(delta) < 1e-5) continue;
       for (let i = i0; i <= i1; i++) {
         const idx = j * this.simW + i;
-        this.height[idx] += delta;
+        const wobble = 1 + 0.07 * Math.sin(i * 0.37 + z * 4.1);
+        this.height[idx] += delta * wobble;
         this.dirX[idx] = 1;
         this.dirZ[idx] = 0;
       }
@@ -593,7 +590,7 @@ export class SandField {
             }
           }
           if (steep > maxDh) {
-            const move = (steep - maxDh) * 0.28;
+            const move = (steep - maxDh) * 0.4;
             h[idx] -= move;
             h[dest] += move;
           }
@@ -618,11 +615,25 @@ export class SandField {
   }
 
   private packTexture(): void {
-    const { field, height, dirX, dirZ } = this;
+    const { field, height, dirX, dirZ, scratch, simW, simH } = this;
+    const lastI = simW - 1;
+    const lastJ = simH - 1;
+    for (let j = 0; j < simH; j++) {
+      for (let i = 0; i < simW; i++) {
+        const idx = j * simW + i;
+        if (i === 0 || j === 0 || i === lastI || j === lastJ) {
+          scratch[idx] = height[idx];
+          continue;
+        }
+        scratch[idx] =
+          height[idx] * 0.46 +
+          (height[idx - 1] + height[idx + 1] + height[idx - simW] + height[idx + simW]) * 0.135;
+      }
+    }
     const n = height.length;
     for (let i = 0; i < n; i++) {
       const o = i * 4;
-      const t = (height[i] - H_MIN) / H_RANGE;
+      const t = (scratch[i] - H_MIN) / H_RANGE;
       field[o] = t <= 0 ? 0 : t >= 1 ? 255 : (t * 255 + 0.5) | 0;
       field[o + 1] = ((dirX[i] * 0.5 + 0.5) * 255 + 0.5) | 0;
       field[o + 2] = ((dirZ[i] * 0.5 + 0.5) * 255 + 0.5) | 0;

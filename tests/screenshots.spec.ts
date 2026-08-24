@@ -12,7 +12,7 @@ test.describe("screenshots", () => {
     test.setTimeout(180_000);
     mkdirSync(outDir, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/");
+    await page.goto("/?hq=1");
     await page.waitForSelector('#app[data-game-ready="true"]');
     await page.waitForFunction(() => window.__ZEN_GARDEN__?.ready === true);
     await page.evaluate((seed) => window.__ZEN_GARDEN__!.plantSeed(seed), SHOT_SEED);
@@ -31,18 +31,18 @@ test.describe("screenshots", () => {
       }
       api.rakeStroke(ring);
       api.rakeFromTo(-5.1, 1.88, 4.6, 1.88);
-      api.settleSand(36);
+      api.settleSand(48);
       return { cx, cz };
     });
     await page.waitForTimeout(800);
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 1.05,
-        elevation: 0.23,
-        zoom: 0.5,
-        tx: -2.35,
-        tz: 1.88,
+        azimuth: 0.92,
+        elevation: 0.4,
+        zoom: 0.58,
+        tx: -2.15,
+        tz: 1.72,
       });
     });
     await page.waitForTimeout(400);
@@ -50,11 +50,11 @@ test.describe("screenshots", () => {
 
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.72,
-        elevation: 0.3,
-        zoom: 1.48,
-        tx: look.cx + 0.18,
-        tz: look.cz + 0.42,
+        azimuth: 0.58,
+        elevation: 0.48,
+        zoom: 1.55,
+        tx: look.cx + 0.1,
+        tz: look.cz + 0.28,
       });
     }, island);
     await page.waitForTimeout(280);
@@ -69,11 +69,11 @@ test.describe("screenshots", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.8,
-        elevation: 0.28,
-        zoom: 1.45,
-        tx: look.cx + 0.18,
-        tz: look.cz + 0.48,
+        azimuth: 0.64,
+        elevation: 0.46,
+        zoom: 1.52,
+        tx: look.cx + 0.08,
+        tz: look.cz + 0.32,
       });
     }, island);
     await page.waitForTimeout(900);
