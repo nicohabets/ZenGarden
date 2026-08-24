@@ -30,7 +30,7 @@ export class FrameMeter {
     if (this.last > 0) {
       this.lastMs = now - this.last;
       this.warmup += 1;
-      if (this.warmup > 18) {
+      if (this.warmup > 8) {
         this.samples.push(this.lastMs);
         if (this.samples.length > 48) this.samples.shift();
       }

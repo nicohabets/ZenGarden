@@ -356,7 +356,10 @@ test.describe("Zen Garden", () => {
     await waitForGarden(page);
     expect(Date.now() - t0).toBeLessThan(12_000);
 
-    await page.waitForTimeout(1400);
+    await page.waitForFunction(() => {
+      const perf = window.__ZEN_GARDEN__?.getPerf();
+      return !!perf && perf.samples >= 8;
+    }, undefined, { timeout: 12_000 });
     const perf = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
       const rake0 = performance.now();
