@@ -43,7 +43,7 @@ export class GrainCloud {
 
     const geo = makeGritGeometry();
     const mat = new THREE.MeshLambertMaterial({
-      color: 0xffffff,
+      color: 0xc4b8a4,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
     this.mesh.frustumCulled = false;
@@ -76,9 +76,9 @@ export class GrainCloud {
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
     const hq = wantHighQuality();
-    const cellBudget = Math.floor(this.maxCount * (hq ? 0.78 : 0.74));
+    const cellBudget = Math.floor(this.maxCount * (hq ? 0.8 : 0.74));
     const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
-    const worldSize = Math.min(spacing * 1.28, hq ? 0.0036 : 0.0072);
+    const worldSize = Math.min(spacing * 1.18, hq ? 0.0042 : 0.0076);
 
     let n = 0;
     let row = 0;
@@ -95,13 +95,18 @@ export class GrainCloud {
         if (blocked(gx, gz, blockers)) continue;
         const mass = sand.sampleHeight(gx, gz);
         n = this.pushGrain(n, gx, gz, mass, hx, 0);
+        if (hq && mass < -0.006 && n < cellBudget) {
+          const ox = gx + (hz - 0.5) * spacing * 0.4;
+          const oz = gz + (hx - 0.5) * spacing * 0.4;
+          if (!blocked(ox, oz, blockers)) n = this.pushGrain(n, ox, oz, mass, hz, 1);
+        }
       }
     }
 
     const pathStep = hq ? Math.max(spacing * 0.65, 0.0035) : Math.max(0.024, spacing);
     const troughCap = Math.floor(this.maxCount * (hq ? 0.88 : 0.82));
-    const troughHalf = hq ? 0.046 : 0.028;
-    const troughStep = Math.max(spacing * 0.78, hq ? 0.0024 : 0.01);
+    const troughHalf = hq ? 0.058 : 0.032;
+    const troughStep = Math.max(spacing * 0.7, hq ? 0.0022 : 0.01);
     sand.forEachTrough(x0, z0, x1, z1, pathStep, (x, z, tx, tz) => {
       if (n >= troughCap) return;
       const across = Math.hypot(tx, tz) || 1;
@@ -199,15 +204,15 @@ export class GrainCloud {
       const layer = this.layers[i];
       const floor = h * SAND_HEIGHT_GAIN;
       const pile = h > 0.002 ? Math.max(0, visualHeight(h) - floor) : 0;
-      const y = GARDEN.sandY + floor + pile + worldSize * 0.42 + layer * LAYER_H;
-      const s = worldSize * (0.82 + seed * 0.28);
+      const y = GARDEN.sandY + floor + pile + worldSize * 0.58 + layer * LAYER_H + 0.0012;
+      const s = worldSize * (0.84 + seed * 0.24);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
-      _dummy.scale.set(s * (0.7 + seed * 0.5), s * (0.2 + seed * 0.16), s * (0.48 + hash2(i, 9) * 0.52));
+      _dummy.scale.set(s * (0.78 + seed * 0.36), s * (0.4 + seed * 0.22), s * (0.62 + hash2(i, 9) * 0.4));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
       const lift = THREE.MathUtils.clamp(layer * 0.012, 0, 0.045);
-      _color.setRGB(0.76 + seed * 0.08 + lift, 0.72 + seed * 0.06 + lift * 0.55, 0.64 + seed * 0.05 + lift * 0.3);
+      _color.setRGB(0.72 + seed * 0.08 + lift, 0.68 + seed * 0.06 + lift * 0.55, 0.6 + seed * 0.05 + lift * 0.3);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -222,17 +227,17 @@ function visualHeight(h: number): number {
   return Math.sign(t) * mag;
 }
 
-/** Angular flattened chip — dry grit, not a sphere or rice grain. */
+/** Angular chip — dry grit with enough height to read in a groove. */
 function makeGritGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.TetrahedronGeometry(0.52, 0);
-  geo.scale(1.2, 0.38, 0.86);
+  const geo = new THREE.TetrahedronGeometry(0.5, 0);
+  geo.scale(1.05, 0.62, 0.8);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
     const k = hash2((x * 53) | 0, (z * 37) | 0);
-    pos.setXYZ(i, x * (0.72 + k * 0.4), y * (0.55 + k * 0.5), z * (0.68 + (1 - k) * 0.38));
+    pos.setXYZ(i, x * (0.7 + k * 0.42), y * (0.62 + k * 0.4), z * (0.66 + (1 - k) * 0.4));
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();

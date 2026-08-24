@@ -115,9 +115,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([206, 196, 178, 255]), 1, 1);
-    pale.colorSpace = THREE.SRGBColorSpace;
-    pale.needsUpdate = true;
+    const pale = gritAlbedoTexture();
     const mat = new THREE.MeshLambertMaterial({
       color: 0xffffff,
       map: pale,
@@ -126,8 +124,9 @@ export class SandField {
       displacementBias: SAND_DISP_BIAS,
     });
     mat.polygonOffset = true;
-    mat.polygonOffsetFactor = 1.5;
-    mat.polygonOffsetUnits = 1.5;
+    mat.polygonOffsetFactor = 2.5;
+    mat.polygonOffsetUnits = 2.5;
+    mat.customProgramCacheKey = () => "sand-grit-bed-v2";
     mat.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader
         .replace(
@@ -136,8 +135,8 @@ export class SandField {
           varying vec3 vGritPos;`,
         )
         .replace(
-          "#include <worldpos_vertex>",
-          `#include <worldpos_vertex>
+          "#include <project_vertex>",
+          `#include <project_vertex>
           vGritPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
         );
       shader.fragmentShader = shader.fragmentShader
@@ -157,16 +156,41 @@ export class SandField {
             float d = gritHash(i + vec2(1.0, 1.0));
             vec2 u = f * f * (3.0 - 2.0 * f);
             return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+          }
+          float gritFlake(vec2 world) {
+            vec2 p = world * 210.0;
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            float rnd = gritHash(i);
+            vec2 center = 0.5 + (vec2(gritHash(i + 19.0), gritHash(i + 47.0)) - 0.5) * 0.34;
+            vec2 d = (f - center) * vec2(1.15 + rnd * 0.4, 0.72 + rnd * 0.5);
+            return smoothstep(0.52, 0.18, length(d));
           }`,
         )
         .replace(
           "#include <color_fragment>",
           `#include <color_fragment>
-          float g =
-            gritNoise(vGritPos.xz * 260.0) * 0.5 +
-            gritNoise(vGritPos.xz * 640.0) * 0.35 +
-            gritNoise(vGritPos.xz * 1400.0) * 0.15;
-          diffuseColor.rgb *= 0.86 + g * 0.2;`,
+          float flake = gritFlake(vGritPos.xz);
+          float fine = gritNoise(vGritPos.xz * 720.0);
+          float dust = gritNoise(vGritPos.xz * 1600.0);
+          vec3 shadowGrit = vec3(0.60, 0.56, 0.48);
+          vec3 midGrit = vec3(0.74, 0.70, 0.62);
+          vec3 paleGrit = vec3(0.86, 0.82, 0.73);
+          vec3 bed = mix(shadowGrit, midGrit, fine);
+          bed = mix(bed, paleGrit, flake * (0.65 + dust * 0.35));
+          diffuseColor.rgb = bed;`,
+        )
+        .replace(
+          "#include <normal_fragment_begin>",
+          `#include <normal_fragment_begin>
+          {
+            float e = 0.004;
+            float h0 = gritFlake(vGritPos.xz) + gritNoise(vGritPos.xz * 720.0) * 0.45;
+            float hx = gritFlake(vGritPos.xz + vec2(e, 0.0)) + gritNoise((vGritPos.xz + vec2(e, 0.0)) * 720.0) * 0.45;
+            float hz = gritFlake(vGritPos.xz + vec2(0.0, e)) + gritNoise((vGritPos.xz + vec2(0.0, e)) * 720.0) * 0.45;
+            vec3 gritN = normalize(vec3((h0 - hx) * 14.0, 1.0, (h0 - hz) * 14.0));
+            normal = normalize(normal + gritN - vec3(0.0, 1.0, 0.0));
+          }`,
         );
     };
 
@@ -1126,4 +1150,31 @@ function base64ToBytes(b64: string): Uint8Array {
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+/** Fallback grit when the bed shader is still compiling. */
+function gritAlbedoTexture(): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("grit texture");
+  ctx.fillStyle = "#b8ad9a";
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 24000; i++) {
+    const x = (i * 53 + 17) % size;
+    const y = (i * 97 + 31) % size;
+    const shade = 150 + ((i * 13) % 70);
+    ctx.fillStyle = `rgb(${shade},${Math.max(0, shade - 10)},${Math.max(0, shade - 28)})`;
+    ctx.fillRect(x, y, 1 + (i % 3), 1 + ((i >> 2) % 2));
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(96, 56);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  return tex;
 }
