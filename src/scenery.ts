@@ -38,17 +38,6 @@ export function createGround(): THREE.Mesh {
   return mesh;
 }
 
-/** Dark crevice bed under the grit so gaps never read as a tan slab. */
-export function createCourtBed(): THREE.Mesh {
-  const mat = new THREE.MeshLambertMaterial({ color: 0x6a6054 });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(GARDEN.width - 0.04, GARDEN.depth - 0.04), mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = GARDEN.sandY - 0.05;
-  mesh.receiveShadow = false;
-  mesh.userData.kind = "sand";
-  return mesh;
-}
-
 /** Pale skirt outside the court so a low camera never falls into a void. */
 export function createApron(): THREE.Group {
   const group = new THREE.Group();

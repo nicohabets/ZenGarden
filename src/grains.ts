@@ -19,8 +19,8 @@ const LAYER_H = 0.0028;
 const SLUMP = 0.0065;
 
 /**
- * Packed pale grit. The court is this cloud — no tan slab underneath.
- * Troughs stay a thinner sandy bed. Extra piles sit only on rake ridges.
+ * Small rounded grit on the grit-colored bed. Troughs stay a thinner
+ * packed bed. Extra piles sit only on rake ridges, not island dirt.
  */
 export class GrainCloud {
   readonly mesh: THREE.InstancedMesh;
@@ -44,7 +44,7 @@ export class GrainCloud {
     const geo = makeGritGeometry();
     const mat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.72,
+      roughness: 0.94,
       metalness: 0,
       envMapIntensity: 0,
     });
@@ -84,9 +84,9 @@ export class GrainCloud {
     const carpetCap = Math.floor(this.maxCount * 0.86);
     const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.62)));
     const px = Math.max(1, viewH);
-    const targetPx = close ? 22 : cam.zoom < 2.2 ? 16 : 20;
+    const targetPx = close ? 8 : cam.zoom < 2.2 ? 11 : 13;
     const screenWorld = (targetPx * cam.zoom) / px;
-    const worldSize = Math.max(spacing * (close ? 1.78 : 1.4), close ? Math.max(screenWorld, 0.024) : screenWorld);
+    const worldSize = Math.max(spacing * 1.58, screenWorld);
 
     let n = 0;
     n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.62), 0, 0.18);
@@ -196,39 +196,18 @@ export class GrainCloud {
       const floor = h * SAND_HEIGHT_GAIN;
       const pile = h > 0.002 ? visualHeight(h) : 0;
       // Troughs sit lower, but never under the court bed — that read as a bare slab.
-      const lift = Math.max(floor + pile, -0.01);
-      const y = GARDEN.sandY + lift + worldSize * 0.42 + layer * LAYER_H;
-      const s = worldSize * (0.82 + seed * 0.28);
+      const lift = Math.max(floor + pile, -0.008);
+      const y = GARDEN.sandY + lift + worldSize * 0.36 + layer * LAYER_H;
+      const s = worldSize * (0.88 + seed * 0.18);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
-      _dummy.scale.set(s * (0.86 + seed * 0.2), s * (0.92 + seed * 0.16), s * (0.84 + hash2(i, 9) * 0.2));
+      _dummy.scale.set(s * (0.9 + seed * 0.16), s * (0.72 + seed * 0.18), s * (0.88 + hash2(i, 9) * 0.16));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const trough = h < -0.004 ? -0.05 : 0;
-      const ridge = layer > 0 ? 0.035 : h > 0.008 ? 0.018 : 0;
-      const bucket = (seed * 4) | 0;
-      let r = 0.68;
-      let g = 0.64;
-      let b = 0.54;
-      if (bucket === 0) {
-        r = 0.82;
-        g = 0.78;
-        b = 0.68;
-      } else if (bucket === 1) {
-        r = 0.74;
-        g = 0.7;
-        b = 0.58;
-      } else if (bucket === 2) {
-        r = 0.68;
-        g = 0.64;
-        b = 0.54;
-      } else {
-        r = 0.62;
-        g = 0.58;
-        b = 0.48;
-      }
-      const j = seed * 0.04;
-      _color.setRGB(r + j + ridge + trough, g + j * 0.8 + ridge * 0.7 + trough, b + j * 0.6 + ridge * 0.45 + trough);
+      const trough = h < -0.004 ? -0.03 : 0;
+      const ridge = layer > 0 ? 0.025 : h > 0.008 ? 0.012 : 0;
+      const t = seed;
+      _color.setRGB(0.72 + t * 0.1 + ridge + trough, 0.68 + t * 0.08 + ridge * 0.7 + trough, 0.58 + t * 0.07 + ridge * 0.45 + trough);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -242,17 +221,17 @@ function visualHeight(h: number): number {
   return Math.pow(t, 0.6) * 0.018;
 }
 
-/** Solid angular pebble — tetrahedrons left holes that showed the slab. */
+/** Small rounded, irregular pebble — not a crystal and not a paper flake. */
 function makeGritGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.OctahedronGeometry(0.5, 0);
-  geo.scale(1.04, 0.92, 1.0);
+  const geo = new THREE.SphereGeometry(0.48, 5, 4);
+  geo.scale(1.08, 0.74, 1.02);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
     const k = hash2((x * 53) | 0, (z * 37) | 0);
-    pos.setXYZ(i, x * (0.84 + k * 0.24), y * (0.8 + k * 0.26), z * (0.82 + (1 - k) * 0.24));
+    pos.setXYZ(i, x * (0.88 + k * 0.18), y * (0.84 + k * 0.2), z * (0.86 + (1 - k) * 0.18));
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();

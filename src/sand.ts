@@ -61,8 +61,8 @@ interface RakeMark {
 
 /**
  * Court mass: a CPU height field with conservation rake and angle-of-repose
- * slump. The mesh is only the packed floor under the grit. Visible sand is
- * the grain cloud: scooped troughs and slumped banks of individual grains.
+ * slump. The mesh is the grit-colored bed; visible sand is that bed plus
+ * a packed cloud of small rounded grains.
  */
 export class SandField {
   readonly mesh: THREE.Mesh;
@@ -115,24 +115,22 @@ export class SandField {
     this.texture.needsUpdate = true;
     this.texture.flipY = true;
 
-    // Invisible pick plane only. A lit height-field reads as a tan slab;
-    // the court is the grain cloud.
-    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth);
+    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xd4c6b0,
-      transparent: true,
-      opacity: 0,
+    const mat = new THREE.MeshLambertMaterial({
+      color: 0xc6baa6,
+      displacementMap: this.texture,
+      displacementScale: SAND_DISP_SCALE,
+      displacementBias: SAND_DISP_BIAS,
     });
-    mat.colorWrite = false;
-    mat.depthWrite = false;
-    mat.depthTest = false;
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = 2;
+    mat.polygonOffsetUnits = 2;
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = false;
     this.mesh.castShadow = false;
-    this.mesh.renderOrder = -2;
     this.mesh.userData.kind = "sand";
 
     this.markAllDirty();
