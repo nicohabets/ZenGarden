@@ -30,7 +30,8 @@ function clayTexture(): THREE.CanvasTexture {
  * same ellipse so grit meets the mound and never sits on it.
  */
 export const MOSS_FOOT = { x: 0.60, z: 0.52 } as const;
-export const MOSS_GRAIN_PAD = 0;
+/** Small metre pad so grain bodies stay off the mound. Moss scale is 1.04× foot. */
+export const MOSS_GRAIN_PAD = 0.016;
 
 /** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
 export function createGround(): THREE.Group {
@@ -120,7 +121,7 @@ export function createFrame(): THREE.Group {
 function islandGeometry(seed: number): THREE.BufferGeometry {
   // Closed ellipsoid. Yanking a sphere skirt open showed a bright
   // interior and grit underneath; that is the HUD clip.
-  const geo = new THREE.SphereGeometry(1, 28, 18);
+  const geo = new THREE.IcosahedronGeometry(1, 3);
   const rng = mulberry32(seed);
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
