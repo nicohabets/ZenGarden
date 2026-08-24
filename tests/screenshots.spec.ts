@@ -9,7 +9,7 @@ test.describe("screenshots", () => {
   test.skip(!process.env.SHOTS, "set SHOTS=1 to capture PR images");
 
   test("nose-on gravel, island rings, and mobile close", async ({ page }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(360_000);
     mkdirSync(outDir, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/?hq=1");

@@ -237,7 +237,7 @@ export class GrainBed {
       }
       const posed = pushToBank(sample, x0, z0, e);
       const stack = layer ? layer[i] : 0;
-      if (stack === 1 && posed.h < 0.01) {
+      if (stack === 1 && posed.h < 0.006) {
         dummy.position.set(posed.x, -2, posed.z);
         dummy.scale.set(0.001, 0.001, 0.001);
         dummy.updateMatrix();
@@ -252,9 +252,9 @@ export class GrainBed {
         continue;
       }
       const pile = Math.max(0, posed.h);
-      const furrow = posed.h < -0.01 ? 0.48 : 1;
-      const yJit = (hash01(i, 77) - 0.32) * 0.012;
-      const lift = sy[i] * 0.62 * furrow + (stack === 1 ? 0.01 + pile * 0.55 : 0) + pile * 0.85 + yJit;
+      const furrow = posed.h < -0.006 ? 0.34 : 1;
+      const yJit = (hash01(i, 77) - 0.28) * 0.01;
+      const lift = sy[i] * 0.7 * furrow + (stack === 1 ? 0.012 + pile * 0.7 : 0) + pile * 1.05 + yJit;
       dummy.position.set(posed.x, GARDEN.sandY + posed.h + lift, posed.z);
       dummy.rotation.set(rx[i] + posed.tiltX, ry[i], rz[i] + posed.tiltZ);
       dummy.scale.set(sx[i] * (1 + pile * 1.6) * furrow, sy[i] * (1 + pile * 2.4) * furrow, sz[i] * (1 + pile * 1.6) * furrow);
@@ -305,13 +305,13 @@ function pushToBank(sample: HeightSample, x: number, z: number, e: number): {
   const gLen = Math.hypot(gx, gz);
   let px = x;
   let pz = z;
-  if (h < avg - 0.0025 && gLen > 1e-6) {
-    const push = Math.min(0.078, (avg - h) * 1.55);
+  if (h < avg - 0.0018 && gLen > 1e-6) {
+    const push = Math.min(0.09, (avg - h) * 1.85);
     px += (gx / gLen) * push;
     pz += (gz / gLen) * push;
   }
   const hh = sample(px, pz);
-  const hide = hh < -0.04 && h < avg - 0.014;
+  const hide = h < avg - 0.008 || hh < -0.028;
   return {
     x: px,
     z: pz,
