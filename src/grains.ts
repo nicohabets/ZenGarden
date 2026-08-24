@@ -90,7 +90,7 @@ export class GrainCloud {
     // Overlap so the bed is opaque packed grit, not a tan plane in the gaps.
     const worldSize = Math.max(spacing * 1.78, screenWorld);
     // Inflate keep-out by a grain radius so bodies meet moss and do not sit on it.
-    const keep = inflateBlockers(blockers, worldSize * 0.46);
+    const keep = inflateBlockers(blockers, worldSize * 0.55);
 
     let n = 0;
     n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, keep, Math.floor(this.maxCount * 0.68), 0, 0.2);

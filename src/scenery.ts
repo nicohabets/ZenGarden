@@ -29,7 +29,7 @@ function clayTexture(): THREE.CanvasTexture {
  * Moss foot in units of `moss.scale`. Grain keep-out uses the same ellipse
  * so grit meets moss and never sits on it.
  */
-export const MOSS_FOOT = { x: 0.62, z: 0.52 } as const;
+export const MOSS_FOOT = { x: 0.58, z: 0.50 } as const;
 
 /** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
 export function createGround(): THREE.Group {
@@ -137,8 +137,18 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
     v.z *= 0.9 + 0.08 * Math.cos(seed * 0.4 + v.x * 1.6);
     v.y = v.y * 0.38 + 0.2;
     if (v.y < 0.04) v.y = 0.04 + rng() * 0.03;
+    // Keep the mound inside the green foot / grain keep-out so grit
+    // never sits on moss and never leaves a tan gap beside it.
+    const ex = v.x / 1.05;
+    const ez = v.z / 1.04;
+    const e = ex * ex + ez * ez;
+    if (e > 1) {
+      const shrink = 1 / Math.sqrt(e);
+      v.x *= shrink;
+      v.z *= shrink;
+    }
     // Drop the lower ring through the grit so the mound meets the court
-    // with moss, not a tan plane under the overhang.
+    // with moss, not a beige void under the overhang.
     if (n.y < 0.12) {
       v.y = -0.12 + rng() * 0.03;
     }
@@ -215,9 +225,9 @@ export function createMoss(states: MossState[]): THREE.Group {
 
     // Green foot at grit height. Same ellipse as the grain keep-out, so
     // the court never shows a tan/grey strip between grit and moss.
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.03, 0.16, 28, 1, true), mossFootMat);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 0.18, 28, 1, false), mossFootMat);
     foot.scale.set(s.scale * MOSS_FOOT.x, 1, s.scale * MOSS_FOOT.z);
-    foot.position.y = 0.04;
+    foot.position.y = 0.03;
     foot.receiveShadow = true;
     foot.userData.kind = "moss";
     island.add(foot);
