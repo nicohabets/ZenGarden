@@ -129,6 +129,50 @@ export class SandField {
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = 2.5;
     mat.polygonOffsetUnits = 2.5;
+    mat.customProgramCacheKey = () => "sand-flat-grit-v3";
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+          varying vec3 vGritPos;`,
+        )
+        .replace(
+          "#include <project_vertex>",
+          `#include <project_vertex>
+          vGritPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+          varying vec3 vGritPos;
+          float gritHash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+          }
+          float gritNoise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            float a = gritHash(i);
+            float b = gritHash(i + vec2(1.0, 0.0));
+            float c = gritHash(i + vec2(0.0, 1.0));
+            float d = gritHash(i + vec2(1.0, 1.0));
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+          }`,
+        )
+        .replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+          float g =
+            gritNoise(vGritPos.xz * 160.0) * 0.4 +
+            gritNoise(vGritPos.xz * 390.0) * 0.35 +
+            gritNoise(vGritPos.xz * 820.0) * 0.25;
+          vec3 lo = vec3(0.70, 0.66, 0.58);
+          vec3 hi = vec3(0.86, 0.82, 0.73);
+          diffuseColor.rgb = mix(lo, hi, g);`,
+        );
+    };
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
