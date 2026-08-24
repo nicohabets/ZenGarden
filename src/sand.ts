@@ -115,69 +115,24 @@ export class SandField {
     this.texture.needsUpdate = true;
     this.texture.flipY = true;
 
-    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
+    // Invisible pick plane only. A lit height-field reads as a tan slab;
+    // the court is the grain cloud.
+    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth);
     geo.rotateX(-Math.PI / 2);
-
-    const pale = gritAlbedoTexture();
-    const mat = new THREE.MeshLambertMaterial({
-      color: 0xffffff,
-      map: pale,
-      displacementMap: this.texture,
-      displacementScale: SAND_DISP_SCALE,
-      displacementBias: SAND_DISP_BIAS,
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xd4c6b0,
+      transparent: true,
+      opacity: 0,
     });
-    mat.polygonOffset = true;
-    mat.polygonOffsetFactor = 2.5;
-    mat.polygonOffsetUnits = 2.5;
-    mat.customProgramCacheKey = () => "sand-flat-grit-v3";
-    mat.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          "#include <common>",
-          `#include <common>
-          varying vec3 vGritPos;`,
-        )
-        .replace(
-          "#include <project_vertex>",
-          `#include <project_vertex>
-          vGritPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          "#include <common>",
-          `#include <common>
-          varying vec3 vGritPos;
-          float gritHash(vec2 p) {
-            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-          }
-          float gritNoise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            float a = gritHash(i);
-            float b = gritHash(i + vec2(1.0, 0.0));
-            float c = gritHash(i + vec2(0.0, 1.0));
-            float d = gritHash(i + vec2(1.0, 1.0));
-            vec2 u = f * f * (3.0 - 2.0 * f);
-            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-          }`,
-        )
-        .replace(
-          "#include <color_fragment>",
-          `#include <color_fragment>
-          float g =
-            gritNoise(vGritPos.xz * 140.0) * 0.35 +
-            gritNoise(vGritPos.xz * 340.0) * 0.4 +
-            gritNoise(vGritPos.xz * 780.0) * 0.25;
-          vec3 lo = vec3(0.54, 0.50, 0.42);
-          vec3 hi = vec3(0.93, 0.89, 0.78);
-          diffuseColor.rgb = mix(lo, hi, g);`,
-        );
-    };
+    mat.colorWrite = false;
+    mat.depthWrite = false;
+    mat.depthTest = false;
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = false;
     this.mesh.castShadow = false;
+    this.mesh.renderOrder = -2;
     this.mesh.userData.kind = "sand";
 
     this.markAllDirty();
@@ -1130,31 +1085,4 @@ function base64ToBytes(b64: string): Uint8Array {
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
-}
-
-/** Fallback grit when the bed shader is still compiling. */
-function gritAlbedoTexture(): THREE.CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("grit texture");
-  ctx.fillStyle = "#c4b8a4";
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 12000; i++) {
-    const x = (i * 53 + 17) % size;
-    const y = (i * 97 + 31) % size;
-    const shade = 176 + ((i * 13) % 28);
-    ctx.fillStyle = `rgb(${shade},${Math.max(0, shade - 8)},${Math.max(0, shade - 20)})`;
-    ctx.fillRect(x, y, 1 + (i % 2), 1);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(36, 21);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  return tex;
 }

@@ -38,18 +38,32 @@ export function createGround(): THREE.Mesh {
   return mesh;
 }
 
-/** Pale gravel skirt so a low camera never falls into a black void. */
-export function createApron(): THREE.Mesh {
+/** Pale skirt outside the court so a low camera never falls into a void. */
+export function createApron(): THREE.Group {
+  const group = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({
     color: 0xe6dfd2,
     roughness: 0.96,
     metalness: 0,
   });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(22, 15), mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = GARDEN.sandY - 0.035;
-  mesh.receiveShadow = true;
-  return mesh;
+  const y = GARDEN.sandY - 0.035;
+  const w = GARDEN.width;
+  const d = GARDEN.depth;
+  const rim = 4;
+  const strips: Array<[number, number, number, number]> = [
+    [w + rim * 2, rim, 0, d / 2 + rim / 2],
+    [w + rim * 2, rim, 0, -d / 2 - rim / 2],
+    [rim, d, w / 2 + rim / 2, 0],
+    [rim, d, -w / 2 - rim / 2, 0],
+  ];
+  for (const [bw, bd, x, z] of strips) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(bw, bd), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, y, z);
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
 }
 
 export function createFrame(): THREE.Group {
@@ -164,7 +178,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     island.userData.kind = "moss";
 
     const soil = new THREE.Mesh(islandGeometry(seed ^ 0x51), earth);
-    soil.scale.set(s.scale * 0.62, s.scale * 0.22, s.scale * 0.54);
+    soil.scale.set(s.scale * 0.68, s.scale * 0.22, s.scale * 0.6);
     soil.position.y = -0.01;
     soil.receiveShadow = true;
     soil.castShadow = false;
