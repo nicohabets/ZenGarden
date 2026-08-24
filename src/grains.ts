@@ -81,15 +81,15 @@ export class GrainCloud {
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
     const hq = wantHighQuality();
-    const carpetCap = Math.floor(this.maxCount * 0.86);
-    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.62)));
+    const carpetCap = Math.floor(this.maxCount * 0.9);
+    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.7)));
     const px = Math.max(1, viewH);
     const targetPx = close ? 8 : cam.zoom < 2.2 ? 11 : 13;
     const screenWorld = (targetPx * cam.zoom) / px;
     const worldSize = Math.max(spacing * 1.58, screenWorld);
 
     let n = 0;
-    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.62), 0, 0.18);
+    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.7), 0, 0.16);
     n = this.plantCarpet(
       n,
       x0 + spacing * 0.5,
@@ -121,7 +121,7 @@ export class GrainCloud {
       }
     });
 
-    const bankLayers = hq ? 3 : 2;
+    const bankLayers = hq ? 2 : 1;
     sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, tx, tz, h) => {
       if (n >= this.maxCount) return;
       const across = Math.hypot(tx, tz) || 1;

@@ -178,7 +178,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     island.userData.kind = "moss";
 
     const soil = new THREE.Mesh(islandGeometry(seed ^ 0x51), earth);
-    soil.scale.set(s.scale * 0.56, s.scale * 0.2, s.scale * 0.49);
+    soil.scale.set(s.scale * 0.4, s.scale * 0.12, s.scale * 0.34);
     soil.position.y = -0.01;
     soil.receiveShadow = true;
     soil.castShadow = false;

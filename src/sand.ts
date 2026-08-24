@@ -115,22 +115,24 @@ export class SandField {
     this.texture.needsUpdate = true;
     this.texture.flipY = true;
 
-    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
+    // Pick plane only. A lit Lambert bed reads as a tan slab / island halo.
+    // The visible court is the packed grain cloud, all the way to the moss.
+    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth);
     geo.rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshLambertMaterial({
-      color: 0xb7ab97,
-      displacementMap: this.texture,
-      displacementScale: SAND_DISP_SCALE,
-      displacementBias: SAND_DISP_BIAS,
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xc8bca8,
+      transparent: true,
+      opacity: 0,
     });
-    mat.polygonOffset = true;
-    mat.polygonOffsetFactor = 2;
-    mat.polygonOffsetUnits = 2;
+    mat.colorWrite = false;
+    mat.depthWrite = false;
+    mat.depthTest = false;
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = false;
     this.mesh.castShadow = false;
+    this.mesh.renderOrder = -2;
     this.mesh.userData.kind = "sand";
 
     this.markAllDirty();
