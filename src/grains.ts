@@ -101,15 +101,16 @@ export class GrainCloud {
         const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.3;
         if (blocked(gx, gz, blockers)) continue;
         const mass = sand.sampleHeight(gx, gz);
-        n = this.pushGrain(n, gx, gz, mass, hash2((gx * 90) | 0, (gz * 90) | 0), 0);
-        if (hq && close && n < troughCap) {
+        const seed = hash2((gx * 90) | 0, (gz * 90) | 0);
+        n = this.pushGrain(n, gx, gz, mass, seed, 0);
+        if (n < troughCap) {
           n = this.pushGrain(
             n,
-            gx + (hash2((gz * 17) | 0, 8) - 0.5) * spacing * 0.45,
-            gz + (hash2(6, (gx * 19) | 0) - 0.5) * spacing * 0.45,
+            gx + (hash2((gz * 17) | 0, 8) - 0.5) * spacing * 0.4,
+            gz + (hash2(6, (gx * 19) | 0) - 0.5) * spacing * 0.4,
             mass,
             hash2((gx * 13) | 0, 21),
-            0,
+            1,
           );
         }
       }
@@ -216,7 +217,7 @@ export class GrainCloud {
       const layer = this.layers[i];
       const floor = h * SAND_HEIGHT_GAIN;
       const pile = h > 0.002 ? visualHeight(h) : 0;
-      const y = GARDEN.sandY + floor + pile + worldSize * 0.52 + layer * LAYER_H + 0.0016;
+      const y = GARDEN.sandY + floor + pile + worldSize * 0.78 + layer * LAYER_H + 0.0022;
       const s = worldSize * (0.86 + seed * 0.22);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
@@ -224,7 +225,7 @@ export class GrainCloud {
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
       const lift = THREE.MathUtils.clamp(layer * 0.014, 0, 0.05);
-      _color.setRGB(0.78 + seed * 0.07 + lift, 0.74 + seed * 0.05 + lift * 0.5, 0.66 + seed * 0.04 + lift * 0.28);
+      _color.setRGB(0.84 + seed * 0.06 + lift, 0.8 + seed * 0.05 + lift * 0.45, 0.72 + seed * 0.04 + lift * 0.25);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
