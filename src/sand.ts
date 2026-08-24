@@ -115,7 +115,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([226, 218, 206, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([224, 216, 204, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({
@@ -127,8 +127,8 @@ export class SandField {
       displacementScale: SAND_DISP_SCALE,
       displacementBias: SAND_DISP_BIAS,
       envMapIntensity: 0,
-      emissive: 0x000000,
-      emissiveIntensity: 0,
+      emissive: 0xcac2b6,
+      emissiveIntensity: 0.18,
     });
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = 1.5;
