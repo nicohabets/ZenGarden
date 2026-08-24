@@ -103,7 +103,7 @@ export class GrainCloud {
         const gz = z + (hz - 0.5) * spacing * 1.65;
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
-        const h = sand.sampleHeight(gx, gz);
+        const h = sand.sampleVisual(gx, gz);
         if (h < -0.016 && keep < 0.55) continue;
         n = this.pushGrain(n, gx, gz, h, keep, 0);
         if (h > -0.004 && keep > 0.55 && n < cellBudget) {
@@ -170,7 +170,7 @@ export class GrainCloud {
     const spanZ = Math.max(0.1, bounds.z1 - bounds.z0);
     const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.4))));
     const n = this.count;
-    for (let i = 0; i < n; i++) this.hs[i] = sand.sampleHeight(this.xs[i], this.zs[i]);
+    for (let i = 0; i < n; i++) this.hs[i] = sand.sampleVisual(this.xs[i], this.zs[i]);
     this.writeInstances(THREE.MathUtils.clamp(spacing * 1.55, 0.0014, 0.034));
   }
 

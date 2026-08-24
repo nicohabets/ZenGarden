@@ -41,6 +41,21 @@ interface Rect {
   j1: number;
 }
 
+interface RakeMark {
+  kind: "seg" | "arc";
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  cx: number;
+  cz: number;
+  r: number;
+  a0: number;
+  a1: number;
+  depth: number;
+  multi: boolean;
+}
+
 /**
  * Court mass: a CPU height field with conservation rake and angle-of-repose
  * slump. The mesh is only the packed floor under the grit. Visible sand is
@@ -65,6 +80,7 @@ export class SandField {
   private slumpRow = 0;
   private packNeeded = false;
   private occupantsDirty = false;
+  private readonly marks: RakeMark[] = [];
   private readonly cellX: number;
   private readonly cellZ: number;
   private readonly cellMin: number;
@@ -141,6 +157,7 @@ export class SandField {
       this.dirX[i] = 0;
       this.dirZ[i] = 0;
     }
+    this.marks.length = 0;
     this.markAllDirty();
     this.queueSlump(3);
   }
@@ -162,6 +179,14 @@ export class SandField {
     const i = this.worldToI(x);
     const j = this.worldToJ(z);
     return { x: this.dirX[j * this.simW + i], z: this.dirZ[j * this.simW + i] };
+  }
+
+  /** Sharp rake profile at grain scale, before slump smooths the mass field. */
+  sampleVisual(x: number, z: number): number {
+    let mark = 0;
+    for (let i = 0; i < this.marks.length; i++) mark += markDelta(this.marks[i], x, z);
+    if (Math.abs(mark) < 1e-4) return this.sampleHeight(x, z);
+    return mark;
   }
 
   getSandVolume(): number {
@@ -242,6 +267,22 @@ export class SandField {
     }
     this.expandDirty(i0, j0, i1, j1);
     this.queueSlump(4);
+    for (const gz of grooves) {
+      this.marks.push({
+        kind: "seg",
+        ax: x0,
+        az: gz,
+        bx: x1,
+        bz: gz,
+        cx: 0,
+        cz: 0,
+        r: 0,
+        a0: 0,
+        a1: 0,
+        depth,
+        multi: false,
+      });
+    }
   }
 
   embedOccupants(items: Occupant[]): void {
@@ -549,6 +590,20 @@ export class SandField {
       }
     }
     this.expandDirty(i0, j0, i1, j1);
+    this.marks.push({
+      kind: "seg",
+      ax,
+      az,
+      bx,
+      bz,
+      cx: 0,
+      cz: 0,
+      r: 0,
+      a0: 0,
+      a1: 0,
+      depth,
+      multi: true,
+    });
   }
 
   private carveArc(
@@ -597,6 +652,20 @@ export class SandField {
       }
     }
     this.expandDirty(i0, j0, i1, j1);
+    this.marks.push({
+      kind: "arc",
+      ax: 0,
+      az: 0,
+      bx: 0,
+      bz: 0,
+      cx,
+      cz,
+      r: radius,
+      a0,
+      a1,
+      depth,
+      multi: !single,
+    });
   }
 
   private slumpRegion(rect: Rect, iterations: number): void {
@@ -766,6 +835,32 @@ function singleTine(across: number): number {
     Math.exp(-0.5 * ((across - RIDGE_OFF) / RIDGE_SIGMA) ** 2) +
     Math.exp(-0.5 * ((across + RIDGE_OFF) / RIDGE_SIGMA) ** 2);
   return -trough + (TROUGH_SIGMA / (2 * RIDGE_SIGMA)) * ridge;
+}
+
+function markDelta(mark: RakeMark, x: number, z: number): number {
+  if (mark.kind === "seg") {
+    const dx = mark.bx - mark.ax;
+    const dz = mark.bz - mark.az;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return 0;
+    const tx = dx / len;
+    const tz = dz / len;
+    const t = (x - mark.ax) * tx + (z - mark.az) * tz;
+    if (t < -0.02 || t > len + 0.02) return 0;
+    const across = (x - mark.ax) * -tz + (z - mark.az) * tx;
+    const pad = mark.multi ? TINES * TINE_GAP * 0.5 + RIDGE_OFF + 0.05 : RIDGE_OFF + TROUGH_SIGMA * 3;
+    if (Math.abs(across) > pad) return 0;
+    return (mark.multi ? tineProfile(across) : singleTine(across)) * mark.depth;
+  }
+  const dx = x - mark.cx;
+  const dz = z - mark.cz;
+  const dist = Math.hypot(dx, dz);
+  const across = dist - mark.r;
+  const pad = mark.multi ? TINES * TINE_GAP * 0.5 + RIDGE_OFF + 0.05 : RIDGE_OFF + TROUGH_SIGMA * 3;
+  if (Math.abs(across) > pad) return 0;
+  const sweep = mark.a1 - mark.a0;
+  if (!angleInSweep(Math.atan2(dz, dx), mark.a0, sweep)) return 0;
+  return (mark.multi ? tineProfile(across) : singleTine(across)) * mark.depth;
 }
 
 function tineProfile(across: number): number {
