@@ -515,8 +515,8 @@ export class ZenGarden {
         x: m.x,
         z: m.z,
         r: m.scale * 0.72,
-        rx: m.scale * 0.8,
-        rz: m.scale * 0.7,
+        rx: m.scale * 1.06,
+        rz: m.scale * 0.92,
         rotY: m.rotY,
       });
     }
