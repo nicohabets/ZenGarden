@@ -37,8 +37,10 @@ export class GrainCloud {
     this.layers = new Float32Array(this.maxCount);
 
     const geo = makeGritGeometry();
-    const mat = new THREE.MeshBasicMaterial({
-      toneMapped: true,
+    const mat = new THREE.MeshStandardMaterial({
+      roughness: 1,
+      metalness: 0,
+      envMapIntensity: 0,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
     this.mesh.frustumCulled = false;
@@ -134,15 +136,15 @@ export class GrainCloud {
       const seed = this.seeds[i];
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
       const pile = Math.max(0, h);
-      const y = GARDEN.sandY + 0.0018 + pile * 1.15 + this.layers[i] * (0.0036 + pile * 0.08) + (seed - 0.5) * 0.0012;
-      const s = worldSize * (0.7 + seed * 0.42);
+      const y = GARDEN.sandY + 0.0018 + pile * 1.55 + this.layers[i] * (0.004 + pile * 0.1) + (seed - 0.5) * 0.0012;
+      const s = worldSize * (0.68 + seed * 0.38 + pile * 1.6);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 5.1, seed * 6.8, hash2(i + 3, 17) * 6.2);
       _dummy.scale.set(s * (0.88 + seed * 0.24), s * (0.48 + seed * 0.2), s * (0.82 + hash2(i, 9) * 0.28));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const crest = Math.min(0.08, pile * 1.4);
-      _color.setRGB(0.71 + seed * 0.07 + crest, 0.68 + seed * 0.06 + crest * 0.7, 0.61 + seed * 0.05 + crest * 0.4);
+      const crest = Math.min(0.1, pile * 1.6);
+      _color.setRGB(0.84 + seed * 0.08 + crest, 0.80 + seed * 0.06 + crest * 0.7, 0.72 + seed * 0.05 + crest * 0.45);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
