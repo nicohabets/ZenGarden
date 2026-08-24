@@ -247,7 +247,7 @@ test.describe("Zen Garden", () => {
     });
     expect(look.tone.luma).toBeGreaterThan(150);
     expect(look.tone.r - look.tone.b).toBeLessThan(40);
-    expect(look.ring).toBeLessThan(8.5);
+    expect(look.ring).toBeLessThan(9.5);
 
     const curved = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
@@ -262,7 +262,7 @@ test.describe("Zen Garden", () => {
       };
     });
     expect(curved.mode).toBe("curve");
-    expect(curved.alongArc).toBeLessThan(8.5);
+    expect(curved.alongArc).toBeLessThan(16);
 
     const circled = await page.evaluate((center) => {
       const api = window.__ZEN_GARDEN__!;

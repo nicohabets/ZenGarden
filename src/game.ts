@@ -162,7 +162,7 @@ export class ZenGarden {
       this.sand.paintRing(island.x, island.z, island.innerR + 1.15, island.innerR, 0.165);
     }
     this.sand.embedOccupants(this.occupants());
-    this.sand.settle(8);
+    this.sand.settle(12);
     this.sand.flush();
     this.settleOccupants();
     this.meter.plantMs = performance.now() - t0;

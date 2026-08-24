@@ -341,7 +341,7 @@ export class SandField {
       const cz = fromZ + dz * t;
       let best = prev;
       let bestH = 99;
-      const win = s === 0 ? 0.28 : 0.12;
+      const win = s === 0 ? 0.14 : 0.08;
       for (let o = prev - win; o <= prev + win; o += 0.012) {
         const h = this.sampleHeight(cx + nx * o, cz + nz * o);
         if (h < bestH) {
@@ -367,7 +367,7 @@ export class SandField {
       const nz = Math.sin(a);
       let best = prev;
       let bestH = 99;
-      const win = i === 0 ? 0.22 : 0.1;
+      const win = i === 0 ? 0.12 : 0.08;
       for (let o = prev - win; o <= prev + win; o += 0.01) {
         const h = this.sampleHeight(px + nx * o, pz + nz * o);
         if (h < bestH) {
