@@ -518,8 +518,8 @@ export class ZenGarden {
   }
 
   /**
-   * Grain keep-out. Matches the moss body so grit packs to the skirt
-   * and never sits on the mound. Do not pad — that was the shoreline.
+   * Grain keep-out. Matches the closed moss mound. Instance write
+   * also hides any grain body that still overlaps the ellipse.
    */
   private grainBlockers(): Blocker[] {
     const list: Blocker[] = [

@@ -72,10 +72,10 @@ export class GrainCloud {
   private layout(cam: CameraRig, sand: SandField, blockers: Blocker[], viewH: number): void {
     const court = courtBounds();
     const close = cam.zoom < 1.2;
-    // Mid-zoom (island-rings) also uses the view footprint so grains stay
-    // small enough to meet moss. Full-court planting at that zoom made
-    // pebbles large enough to sit on the mound.
-    const bounds = cam.zoom < 2.5 ? slantBounds(cam) : court;
+    const hud = cam.zoom >= 2.3;
+    // Always plant the view. Full-court at HUD made a noise sheet of
+    // pin-head grains; close-up already used the frustum.
+    const bounds = slantBounds(cam);
     const x0 = Math.max(court.x0, bounds.x0);
     const x1 = Math.min(court.x1, bounds.x1);
     const z0 = Math.max(court.z0, bounds.z0);
@@ -83,16 +83,16 @@ export class GrainCloud {
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
     const hq = wantHighQuality();
-    const carpetCap = Math.floor(this.maxCount * 0.9);
-    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.82)));
+    const carpetCap = Math.floor(this.maxCount * (hud ? 0.86 : 0.9));
+    const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * (hud ? 0.55 : 0.82))));
     const px = Math.max(1, viewH);
-    const targetPx = close ? 7 : cam.zoom < 2.2 ? 10 : 12;
+    const targetPx = close ? 7 : hud ? 18 : 11;
     const screenWorld = (targetPx * cam.zoom) / px;
-    // Overlap so the bed is opaque packed grit, not a tan plane in the gaps.
-    const worldSize = Math.max(spacing * 1.78, screenWorld);
+    const pack = close ? 1.78 : hud ? 1.22 : 1.5;
+    const worldSize = Math.max(spacing * pack, screenWorld);
 
     let n = 0;
-    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2);
+    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * (hud ? 0.62 : 0.68)), 0, 0.2);
     n = this.plantCarpet(
       n,
       x0 + spacing * 0.5,
@@ -106,43 +106,20 @@ export class GrainCloud {
       0,
       0.16,
     );
-    // Third offset carpet so troughs stay a packed bed, not a skip that shows the plane.
-    n = this.plantCarpet(
-      n,
-      x0 + spacing * 0.25,
-      z0 + spacing * 0.58,
-      x1,
-      z1,
-      spacing * 0.92,
-      sand,
-      blockers,
-      Math.floor(this.maxCount * 0.95),
-      0,
-      0.18,
-    );
-
-    // Hug each moss ellipse so the hex carpet cannot leave a beige
-    // shoreline the width of one spacing step.
-    const hugCap = Math.floor(this.maxCount * 0.97);
-    for (const b of blockers) {
-      if (!b.rx || !b.rz || n >= hugCap) continue;
-      const rot = b.rotY ?? 0;
-      const c = Math.cos(rot);
-      const s = Math.sin(rot);
-      const steps = hq ? 96 : 64;
-      for (let i = 0; i < steps && n < hugCap; i++) {
-        const a = (i / steps) * Math.PI * 2;
-        const ca = Math.cos(a);
-        const sa = Math.sin(a);
-        for (const pad of [0.01, 0.024, 0.042, 0.064]) {
-          const lx = ca * (b.rx + pad);
-          const lz = sa * (b.rz + pad);
-          const gx = b.x + lx * c - lz * s;
-          const gz = b.z + lx * s + lz * c;
-          if (blocked(gx, gz, blockers)) continue;
-          n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 80) | 0, (gz * 80) | 0), 0);
-        }
-      }
+    if (!hud) {
+      n = this.plantCarpet(
+        n,
+        x0 + spacing * 0.25,
+        z0 + spacing * 0.58,
+        x1,
+        z1,
+        spacing * 0.92,
+        sand,
+        blockers,
+        Math.floor(this.maxCount * 0.95),
+        0,
+        0.18,
+      );
     }
 
     const pathStep = hq ? Math.max(spacing * 0.45, 0.0024) : Math.max(spacing * 0.85, 0.014);
@@ -164,7 +141,7 @@ export class GrainCloud {
 
     this.count = n;
     this.mesh.count = n;
-    this.writeInstances(worldSize);
+    this.writeInstances(worldSize, blockers);
   }
 
   private plantCarpet(
@@ -207,15 +184,24 @@ export class GrainCloud {
     return n + 1;
   }
 
-  private writeInstances(worldSize: number): void {
+  private writeInstances(worldSize: number, blockers: Blocker[]): void {
     const n = this.count;
+    const hide = worldSize * 0.4;
     for (let i = 0; i < n; i++) {
       const seed = this.seeds[i];
       const h = this.hs[i];
       const layer = this.layers[i];
+      // Hard mask: grain bodies never sit on moss.
+      if (blockedPadded(this.xs[i], this.zs[i], blockers, hide)) {
+        _dummy.position.set(0, -4, 0);
+        _dummy.scale.setScalar(0);
+        _dummy.updateMatrix();
+        this.mesh.setMatrixAt(i, _dummy.matrix);
+        _color.setRGB(0.6, 0.56, 0.46);
+        this.mesh.setColorAt(i, _color);
+        continue;
+      }
       const floor = h * SAND_HEIGHT_GAIN;
-      // Extra ridge piles read as white pebble clusters on crests and
-      // as a pale shoreline around islands. Height alone is the groove.
       const lift = Math.max(floor, -0.008);
       const y = GARDEN.sandY + lift + worldSize * 0.36 + layer * LAYER_H;
       const s = worldSize * (0.88 + seed * 0.18);
@@ -226,7 +212,7 @@ export class GrainCloud {
       this.mesh.setMatrixAt(i, _dummy.matrix);
       const trough = h < -0.004 ? -0.025 : 0;
       const t = seed;
-      _color.setRGB(0.62 + t * 0.22 + trough, 0.58 + t * 0.18 + trough, 0.48 + t * 0.16 + trough);
+      _color.setRGB(0.56 + t * 0.28 + trough, 0.52 + t * 0.22 + trough, 0.42 + t * 0.18 + trough);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -311,6 +297,10 @@ function slantBounds(cam: CameraRig): { x0: number; z0: number; x1: number; z1: 
 }
 
 function blocked(x: number, z: number, blockers: Blocker[]): boolean {
+  return blockedPadded(x, z, blockers, 0);
+}
+
+function blockedPadded(x: number, z: number, blockers: Blocker[], pad: number): boolean {
   for (const b of blockers) {
     const dx = x - b.x;
     const dz = z - b.z;
@@ -320,8 +310,10 @@ function blocked(x: number, z: number, blockers: Blocker[]): boolean {
       const s = Math.sin(rot);
       const lx = dx * c + dz * s;
       const lz = -dx * s + dz * c;
-      if ((lx * lx) / (b.rx * b.rx) + (lz * lz) / (b.rz * b.rz) < 1) return true;
-    } else if (dx * dx + dz * dz < b.r * b.r) {
+      const rx = b.rx + pad;
+      const rz = b.rz + pad;
+      if ((lx * lx) / (rx * rx) + (lz * lz) / (rz * rz) < 1) return true;
+    } else if (dx * dx + dz * dz < (b.r + pad) * (b.r + pad)) {
       return true;
     }
   }

@@ -26,12 +26,10 @@ function clayTexture(): THREE.CanvasTexture {
 }
 
 /**
- * Moss silhouette in units of `moss.scale`. Grain keep-out uses this
- * ellipse. The living skirt is a few percent larger so grit tucks under
- * moss — no pale shoreline and no grit on the mound.
+ * Closed moss mound in units of `moss.scale`. Grain keep-out uses the
+ * same ellipse so grit meets the mound and never sits on it.
  */
 export const MOSS_FOOT = { x: 0.60, z: 0.52 } as const;
-/** Keep-out matches the body. A positive pad was the beige/white halo. */
 export const MOSS_GRAIN_PAD = 0;
 
 /** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
@@ -120,46 +118,31 @@ export function createFrame(): THREE.Group {
 }
 
 function islandGeometry(seed: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 32, 20);
+  // Closed ellipsoid. Yanking a sphere skirt open showed a bright
+  // interior and grit underneath; that is the HUD clip.
+  const geo = new THREE.SphereGeometry(1, 28, 18);
   const rng = mulberry32(seed);
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
   const v = new THREE.Vector3();
-  const moss = new THREE.Color(0x6a8a48);
-  const mossLite = new THREE.Color(0x8aaa5c);
+  const moss = new THREE.Color(0x4a6834);
+  const mossLite = new THREE.Color(0x6a8648);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const n = v.clone().normalize();
     const wobble =
-      0.18 * Math.sin(v.x * 2.2 + seed) +
-      0.14 * Math.cos(v.z * 2.8 + seed * 0.7) +
-      0.08 * Math.sin(v.x * 4.8 + v.z * 4.1 + seed) +
-      0.05 * (rng() - 0.5);
+      0.07 * Math.sin(v.x * 2.4 + seed) +
+      0.05 * Math.cos(v.z * 2.9 + seed * 0.7) +
+      0.03 * (rng() - 0.5);
     v.addScaledVector(n, wobble);
-    v.x *= 1.04 + 0.07 * Math.sin(seed + v.z * 2.0);
-    v.z *= 0.9 + 0.08 * Math.cos(seed * 0.4 + v.x * 1.6);
-    v.y = v.y * 0.38 + 0.2;
-    if (v.y < 0.04) v.y = 0.04 + rng() * 0.03;
-    // Equator fills the keep-out ellipse so HUD never shows a beige
-    // shoreline. Skirt flares a little and drops through the grit.
-    const skirt = n.y < 0.25;
-    const ring = n.y < 0.72;
-    const nxz = Math.hypot(v.x / 1.05, v.z / 1.04) || 1;
-    if (ring) {
-      // Visible moss overshoots the keep-out so the first grit row
-      // tucks under the mound. Matching 1.0 left a beige shoreline.
-      const target = skirt ? 1.18 : 1.16;
-      v.x = (v.x / nxz) * target;
-      v.z = (v.z / nxz) * target;
-    } else if (nxz > 1) {
+    v.y = v.y * 0.44 + 0.1;
+    const nxz = Math.hypot(v.x, v.z) || 1;
+    if (nxz > 1) {
       v.x /= nxz;
       v.z /= nxz;
     }
-    if (skirt) {
-      v.y = -0.18 + rng() * 0.04;
-    }
     pos.setXYZ(i, v.x, v.y, v.z);
-    const c = moss.clone().lerp(mossLite, rng() * 0.55);
+    const c = moss.clone().lerp(mossLite, rng() * 0.4);
     color.setXYZ(i, c.r, c.g, c.b);
   }
   geo.setAttribute("color", color);
@@ -202,48 +185,36 @@ export function createMoss(states: MossState[]): THREE.Group {
     roughness: 0.96,
     metalness: 0,
     envMapIntensity: 0,
-    emissive: 0x243318,
-    emissiveIntensity: 0.38,
+    emissive: 0x182410,
+    emissiveIntensity: 0.22,
     vertexColors: true,
+    side: THREE.FrontSide,
+    depthWrite: true,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
     const rng = mulberry32(seed);
     const island = new THREE.Group();
-    island.position.set(s.x, GARDEN.sandY - 0.02, s.z);
+    island.position.set(s.x, GARDEN.sandY - 0.04, s.z);
     island.rotation.y = s.rotY;
     island.userData.kind = "moss";
 
-    // Scale the body to the keep-out ellipse. A separate lit cylinder
-    // cap was the white shoreline; a dark disc was the close-up void.
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
-    moss.scale.set((s.scale * MOSS_FOOT.x) / 1.05, s.scale * 0.34, (s.scale * MOSS_FOOT.z) / 1.04);
-    moss.position.y = 0.01;
+    moss.scale.set(s.scale * MOSS_FOOT.x, s.scale * 0.36, s.scale * MOSS_FOOT.z);
+    moss.position.y = 0.04;
     moss.receiveShadow = true;
     moss.castShadow = false;
     moss.userData.kind = "moss";
     island.add(moss);
 
-    // Unlit moss underlay. A lit Standard cap was the white shoreline;
-    // an open ring showed the beige court; a near-black disc was the
-    // close-up void. This only fills pinholes between grit and moss.
-    const under = new THREE.Mesh(
-      new THREE.CylinderGeometry(1, 1, 0.1, 28, 1, false),
-      new THREE.MeshBasicMaterial({ color: 0x4e6a38 }),
-    );
-    under.scale.set(s.scale * MOSS_FOOT.x * 1.2, 1, s.scale * MOSS_FOOT.z * 1.2);
-    under.position.y = -0.05;
-    under.userData.kind = "moss";
-    island.add(under);
-
     const pillows = 2 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {
       const bump = new THREE.Mesh(islandGeometry(seed ^ (17 + p * 13)), mossMat);
-      bump.scale.set(s.scale * randRange(rng, 0.14, 0.22), s.scale * randRange(rng, 0.07, 0.12), s.scale * randRange(rng, 0.12, 0.2));
+      bump.scale.set(s.scale * randRange(rng, 0.12, 0.2), s.scale * randRange(rng, 0.07, 0.11), s.scale * randRange(rng, 0.1, 0.17));
       bump.position.set(
-        randRange(rng, -0.16, 0.16) * s.scale,
-        0.04,
-        randRange(rng, -0.12, 0.12) * s.scale,
+        randRange(rng, -0.14, 0.14) * s.scale,
+        0.06,
+        randRange(rng, -0.1, 0.1) * s.scale,
       );
       bump.rotation.y = rng() * Math.PI;
       bump.receiveShadow = true;
