@@ -67,18 +67,20 @@ export function applyPackedSandShader(
              }
            }
            float id = hash12(cell);
-           float edge = smoothstep(0.02, 0.22, sqrt(md));
+           float edge = smoothstep(0.0, 0.12, sqrt(md));
            return vec4(id, edge, best);
          }
          float grainHeight(vec2 world) {
            float close = smoothstep(2.4, 0.55, uZoom);
-           float freq = mix(240.0, 158.0, close);
+           float freq = mix(260.0, 175.0, close);
            vec4 a = gritCell(world, freq);
-           vec4 b = gritCell(world + vec2(0.37, 0.21), freq * 1.55);
-           float h = 0.18 + a.x * 0.82;
-           h *= mix(0.18, 1.0, a.y);
-           h = mix(h, 0.12 + b.x * 0.5, 0.32);
-           return h;
+           vec4 b = gritCell(world + vec2(0.37, 0.21), freq * 1.7);
+           float plate = 0.72 + a.x * 0.28;
+           float crack = smoothstep(0.02, 0.38, a.y);
+           float h = plate * mix(0.08, 1.0, crack);
+           float dust = 0.55 + b.x * 0.45;
+           dust *= mix(0.2, 1.0, smoothstep(0.0, 0.4, b.y));
+           return mix(h, dust, 0.22);
          }
          vec2 marchGrit(vec2 world) {
            vec3 viewW = normalize(cameraPosition - vSandWorld);
@@ -149,13 +151,13 @@ export function applyPackedSandShader(
          float crest = clamp(curve * 3.6, 0.0, 1.0);
          vec3 pale = vec3(0.95, 0.92, 0.86);
          vec3 midc = vec3(0.86, 0.83, 0.76);
-         vec3 deep = vec3(0.62, 0.58, 0.52);
-         vec3 col = mix(deep, midc, cell.y);
-         col = mix(col, pale, cell.x * 0.62 * cell.y);
-         col *= 0.7 + gH * 0.38;
-         col *= mix(1.0, 0.68, trough);
-         col *= mix(1.0, 1.1, crest);
-         col += vec3(0.035, 0.028, 0.016) * crest * gH;
+         vec3 deep = vec3(0.52, 0.48, 0.43);
+         float crack = smoothstep(0.04, 0.42, cell.y);
+         vec3 col = mix(deep, mix(midc, pale, cell.x), crack);
+         col *= 0.82 + gH * 0.22;
+         col *= mix(1.0, 0.7, trough);
+         col *= mix(1.0, 1.08, crest);
+         col += vec3(0.03, 0.024, 0.014) * crest * crack;
          diffuseColor.rgb = col;
         `,
       )
@@ -165,11 +167,11 @@ export function applyPackedSandShader(
          {
            vec2 uvN = vMapUv;
            float closeN = smoothstep(2.4, 0.55, uZoom);
-           float epsN = mix(0.0018, 0.0009, closeN);
+           vec4 cellN = gritCell(vGritP, mix(260.0, 175.0, closeN));
            vec3 gritN = normalize(vec3(
-             grainHeight(vGritP + vec2(-epsN, 0.0)) - grainHeight(vGritP + vec2(epsN, 0.0)),
-             0.55,
-             grainHeight(vGritP + vec2(0.0, -epsN)) - grainHeight(vGritP + vec2(0.0, epsN))
+             (cellN.x - 0.5) * 1.05,
+             1.2,
+             (hash12(vec2(cellN.x, 3.7)) - 0.5) * 1.05
            ));
            vec4 fld = texture2D(uField, uvN);
            vec3 hx = vec3(uGarden.x * uTexel.x, (texture2D(uField, uvN + vec2(uTexel.x, 0.0)).r - fld.r) * uHeightRange, 0.0);
@@ -181,6 +183,6 @@ export function applyPackedSandShader(
         `,
       );
   };
-  mat.customProgramCacheKey = () => `packed-sand-pom-v3-${steps}`;
+  mat.customProgramCacheKey = () => `packed-sand-pom-v4-${steps}`;
   return look;
 }
