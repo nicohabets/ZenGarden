@@ -225,7 +225,8 @@ export function createMoss(states: MossState[]): THREE.Group {
 
     // Green foot at grit height. Same ellipse as the grain keep-out, so
     // the court never shows a tan/grey strip between grit and moss.
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 0.18, 28, 1, false), mossFootMat);
+    // Wall only. A closed cap caught the key light and read as a tan slab.
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 0.18, 28, 1, true), mossFootMat);
     foot.scale.set(s.scale * MOSS_FOOT.x, 1, s.scale * MOSS_FOOT.z);
     foot.position.y = 0.03;
     foot.receiveShadow = true;
