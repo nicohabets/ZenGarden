@@ -18,9 +18,9 @@ const RIDGE_OFF = 0.056;
 const RIDGE_SIGMA = 0.03;
 const RAKE_DEPTH = 0.05;
 
-/** Displacement so the packed floor carries rake relief at court scale. */
-export const SAND_DISP_SCALE = H_RANGE * 1.85;
-export const SAND_DISP_BIAS = H_MIN * 1.85;
+/** Displacement so leftover gaps under the grit still sit in the valley. */
+export const SAND_DISP_SCALE = H_RANGE * 2.15;
+export const SAND_DISP_BIAS = H_MIN * 2.15;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
@@ -42,8 +42,8 @@ interface Rect {
 
 /**
  * Court mass: a CPU height field with conservation rake and angle-of-repose
- * slump. The mesh is the packed floor (displaced, troughs darker). Visible
- * grit is the grain cloud: scooped from grooves, stacked on the banks.
+ * slump. The mesh is only the packed floor under the grit. Visible sand is
+ * the grain cloud: scooped troughs and slumped banks of individual grains.
  */
 export class SandField {
   readonly mesh: THREE.Mesh;
@@ -98,7 +98,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([188, 180, 168, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([220, 212, 198, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({
@@ -155,6 +155,12 @@ export class SandField {
     const u = x / GARDEN.width + 0.5;
     const v = z / GARDEN.depth + 0.5;
     return this.sampleBilinear(u * (this.simW - 1), v * (this.simH - 1));
+  }
+
+  sampleDir(x: number, z: number): { x: number; z: number } {
+    const i = this.worldToI(x);
+    const j = this.worldToJ(z);
+    return { x: this.dirX[j * this.simW + i], z: this.dirZ[j * this.simW + i] };
   }
 
   getSandVolume(): number {

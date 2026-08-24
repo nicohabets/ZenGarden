@@ -13,16 +13,10 @@ export function grainBudget(): number {
 
 const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
-const _nudge = [
-  [0.055, 0],
-  [-0.055, 0],
-  [0, 0.055],
-  [0, -0.055],
-] as const;
 
 /**
- * Packed millimetre grit. A rake relocates mass onto the banks and leaves
- * the trough empty, so grooves are scooped piles, not a thinned carpet.
+ * Packed millimetre grit. A rake scoops the trough and stacks that mass on
+ * slumped banks — grooves are valleys of grains, not a thinned carpet.
  */
 export class GrainCloud {
   readonly mesh: THREE.InstancedMesh;
@@ -32,6 +26,7 @@ export class GrainCloud {
   private lastHeightAt = 0;
   private readonly xs: Float32Array;
   private readonly zs: Float32Array;
+  private readonly hs: Float32Array;
   private readonly seeds: Float32Array;
   private readonly layers: Float32Array;
 
@@ -39,12 +34,13 @@ export class GrainCloud {
     this.maxCount = grainBudget();
     this.xs = new Float32Array(this.maxCount);
     this.zs = new Float32Array(this.maxCount);
+    this.hs = new Float32Array(this.maxCount);
     this.seeds = new Float32Array(this.maxCount);
     this.layers = new Float32Array(this.maxCount);
 
     const geo = makeGritGeometry();
     const mat = new THREE.MeshStandardMaterial({
-      roughness: 0.97,
+      roughness: 0.96,
       metalness: 0,
       envMapIntensity: 0,
     });
@@ -85,88 +81,106 @@ export class GrainCloud {
     const z1 = Math.min(GARDEN.depth / 2 - 0.03, bounds.z1);
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
-    const cellBudget = Math.floor(this.maxCount * 0.62);
+    const cellBudget = Math.floor(this.maxCount * 0.42);
     const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
-    const worldSize = spacing * 1.05;
+    const worldSize = spacing * 1.72;
 
     let n = 0;
     let row = 0;
     for (let z = z0; z <= z1 && n < cellBudget; z += spacing, row++) {
-      for (let x = x0; x <= x1 && n < cellBudget; x += spacing) {
+      const rowShift = (row % 2) * spacing * 0.37;
+      for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
         const col = ((x - x0) / spacing) | 0;
+        const keep = hash2(row * 29 + 3, col * 17 + 8);
+        if (keep < 0.14) continue;
         const hx = hash2(row * 19 + 3, col * 11 + 5);
         const hz = hash2(row * 41 + 7, col * 23 + 2);
-        let gx = x + (hx - 0.5) * spacing * 0.94;
-        let gz = z + (hz - 0.5) * spacing * 0.94;
+        let gx = x + (hx - 0.5) * spacing * 1.12;
+        let gz = z + (hz - 0.5) * spacing * 1.12;
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
+        const h = sand.sampleHeight(gx, gz);
+        if (h < -0.014 && keep < 0.78) continue;
+        if (h < -0.006 && keep < 0.48) continue;
         const seed = hash2(row * 17 + 4, col * 13 + 9);
-        let h = sand.sampleHeight(gx, gz);
-        if (h < -0.006) {
-          const moved = nudgeToBank(sand, gx, gz, h);
-          gx = moved.x;
-          gz = moved.z;
-          h = moved.h;
-          if (blocked(gx, gz, blockers)) continue;
+        n = this.pushGrain(n, gx, gz, h, seed, 0);
+        const extras = h < -0.008 ? 0 : h > 0.01 ? 2 : 1;
+        for (let e = 1; e <= extras && n < cellBudget; e++) {
+          const ang = hash2(row + e * 13, col + 31) * Math.PI * 2;
+          const rad = spacing * (0.22 + hash2(col + e, row + 11) * 0.38);
+          const sx = gx + Math.cos(ang) * rad;
+          const sz = gz + Math.sin(ang) * rad;
+          if (sx < x0 || sx > x1 || sz < z0 || sz > z1) continue;
+          if (blocked(sx, sz, blockers)) continue;
+          n = this.pushGrain(n, sx, sz, h, hash2(row + e * 7, col + 19), 0);
         }
-        if (h < -0.004) continue;
-        this.xs[n] = gx;
-        this.zs[n] = gz;
-        this.seeds[n] = seed;
-        this.layers[n] = 0;
-        n += 1;
       }
     }
 
     const surface = n;
     for (let i = 0; i < surface && n < this.maxCount; i++) {
-      const h = sand.sampleHeight(this.xs[i], this.zs[i]);
-      if (h < 0.003) continue;
-      const stacks = h > 0.024 ? 6 : h > 0.014 ? 5 : h > 0.008 ? 4 : 3;
+      const h = this.hs[i];
+      if (h < 0.0025) continue;
+      const stacks = h > 0.022 ? 16 : h > 0.014 ? 12 : h > 0.008 ? 8 : 5;
+      const dir = sand.sampleDir(this.xs[i], this.zs[i]);
+      const px = -dir.z;
+      const pz = dir.x;
+      const out = h >= 0 ? 1 : -1;
       for (let layer = 1; layer <= stacks && n < this.maxCount; layer++) {
         const seed = hash2(i + 19 + layer * 7, 23);
-        this.xs[n] = this.xs[i] + (this.seeds[i] - 0.5) * spacing * 0.45;
-        this.zs[n] = this.zs[i] + (hash2(i + 5, 41 + layer) - 0.5) * spacing * 0.45;
-        this.seeds[n] = seed;
-        this.layers[n] = layer;
-        n += 1;
+        const slump = layer * spacing * 0.16 * out;
+        const wobble = (seed - 0.5) * spacing * 0.55;
+        n = this.pushGrain(
+          n,
+          this.xs[i] + px * slump + wobble,
+          this.zs[i] + pz * slump + (hash2(i + 5, 41 + layer) - 0.5) * spacing * 0.55,
+          h,
+          seed,
+          layer,
+        );
       }
     }
 
     this.count = n;
     this.mesh.count = n;
-    this.writeInstances(sand, worldSize);
+    this.writeInstances(worldSize);
+  }
+
+  private pushGrain(n: number, x: number, z: number, h: number, seed: number, layer: number): number {
+    if (n >= this.maxCount) return n;
+    this.xs[n] = x;
+    this.zs[n] = z;
+    this.hs[n] = h;
+    this.seeds[n] = seed;
+    this.layers[n] = layer;
+    return n + 1;
   }
 
   private lift(sand: SandField, cam: CameraRig): void {
     const bounds = slantBounds(cam);
     const spanX = Math.max(0.1, bounds.x1 - bounds.x0);
     const spanZ = Math.max(0.1, bounds.z1 - bounds.z0);
-    const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.62))));
-    this.writeInstances(sand, spacing * 1.05);
+    const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.42))));
+    const n = this.count;
+    for (let i = 0; i < n; i++) this.hs[i] = sand.sampleHeight(this.xs[i], this.zs[i]);
+    this.writeInstances(spacing * 1.72);
   }
 
-  private writeInstances(sand: SandField, worldSize: number): void {
+  private writeInstances(worldSize: number): void {
     const n = this.count;
     for (let i = 0; i < n; i++) {
       const seed = this.seeds[i];
-      const h = sand.sampleHeight(this.xs[i], this.zs[i]);
+      const h = this.hs[i];
       const layer = this.layers[i];
-      const pile = Math.max(0, h);
-        const y =
-        GARDEN.sandY +
-        h * 2.4 +
-        0.0016 +
-        layer * (0.007 + pile * 0.16) +
-        (seed - 0.5) * 0.0012;
-      const s = worldSize * (0.72 + seed * 0.3);
+      const y = GARDEN.sandY + visualHeight(h) + 0.002 + layer * (worldSize * 0.62 + Math.max(0, h) * 0.08);
+      const s = worldSize * (0.78 + seed * 0.28);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 4.2, seed * 6.1, hash2(i + 3, 17) * 5.4);
-      _dummy.scale.set(s * (0.88 + seed * 0.2), s * (0.7 + seed * 0.18), s * (0.86 + hash2(i, 9) * 0.18));
+      _dummy.scale.set(s * (0.9 + seed * 0.16), s * (0.72 + seed * 0.16), s * (0.88 + hash2(i, 9) * 0.16));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const crest = THREE.MathUtils.clamp(h * 2.8 + layer * 0.03, -0.08, 0.14);
-      _color.setRGB(0.83 + seed * 0.07 + crest, 0.79 + seed * 0.05 + crest * 0.7, 0.71 + seed * 0.04 + crest * 0.4);
+      const lift = THREE.MathUtils.clamp(layer * 0.012, 0, 0.08);
+      _color.setRGB(0.86 + seed * 0.06 + lift, 0.82 + seed * 0.045 + lift * 0.7, 0.74 + seed * 0.035 + lift * 0.4);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -174,33 +188,11 @@ export class GrainCloud {
   }
 }
 
-function nudgeToBank(sand: SandField, x: number, z: number, h0: number): { x: number; z: number; h: number } {
-  let bx = x;
-  let bz = z;
-  let bh = h0;
-  for (const [dx, dz] of _nudge) {
-    const nx = x + dx;
-    const nz = z + dz;
-    const h = sand.sampleHeight(nx, nz);
-    if (h > bh) {
-      bh = h;
-      bx = nx;
-      bz = nz;
-    }
-  }
-          if (bh > h0 + 0.003) {
-    for (const [dx, dz] of _nudge) {
-      const nx = bx + dx;
-      const nz = bz + dz;
-      const h = sand.sampleHeight(nx, nz);
-      if (h > bh) {
-        bh = h;
-        bx = nx;
-        bz = nz;
-      }
-    }
-  }
-  return { x: bx, z: bz, h: bh };
+/** Expand leftover rake relief so a scooped bank still reads after slump. */
+function visualHeight(h: number): number {
+  const t = THREE.MathUtils.clamp(h / 0.055, -1, 1);
+  const mag = Math.pow(Math.abs(t), 0.48) * 0.17;
+  return Math.sign(t) * mag;
 }
 
 function makeGritGeometry(): THREE.BufferGeometry {

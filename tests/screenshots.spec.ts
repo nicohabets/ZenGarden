@@ -31,7 +31,7 @@ test.describe("screenshots", () => {
       }
       api.rakeStroke(ring);
       api.rakeFromTo(-5.1, 1.88, 4.6, 1.88);
-      api.settleSand(8);
+      api.settleSand(3);
       return { cx, cz };
     });
     await page.waitForTimeout(400);

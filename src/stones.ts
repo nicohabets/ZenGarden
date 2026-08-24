@@ -107,9 +107,9 @@ function deform(geo: THREE.BufferGeometry, variant: number, flattenY: number, ch
     v.fromBufferAttribute(pos, i);
     n.copy(v).normalize();
     const ridges =
-      0.045 * Math.sin(v.x * 2.2 + v.z * 1.5 + variant) +
-      0.028 * Math.cos(v.y * 2.4 + v.x * 1.8 + variant * 0.5) +
-      0.016 * Math.sin(v.x * 4.6 + v.z * 4.1 + variant * 1.3);
+      0.02 * Math.sin(v.x * 1.6 + v.z * 1.1 + variant) +
+      0.012 * Math.cos(v.y * 1.8 + v.x * 1.3 + variant * 0.5) +
+      0.007 * Math.sin(v.x * 3.1 + v.z * 2.8 + variant * 1.3);
     v.addScaledVector(n, ridges + chips * (rng() - 0.5));
     v.x *= stretchX;
     v.z *= stretchZ;
@@ -134,11 +134,11 @@ export function createStoneGeometry(variant: number): THREE.BufferGeometry {
 
   const shape = shapeOf(variant);
   let geo: THREE.BufferGeometry;
-  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 10, 5, 8), variant, 0.94, 0.03);
-  else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 3), variant, 1.36, 0.028);
-  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 28, 20), variant, 0.56, 0.022);
-  else if (shape === "angular") geo = deform(new THREE.SphereGeometry(0.74, 22, 16), variant, 0.82, 0.02);
-  else geo = deform(new THREE.SphereGeometry(0.86, 24, 18), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.018);
+  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 16, 8, 12), variant, 0.94, 0.016);
+  else if (shape === "standing") geo = deform(new THREE.SphereGeometry(0.64, 48, 36), variant, 1.28, 0.012);
+  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 48, 36), variant, 0.56, 0.01);
+  else if (shape === "angular") geo = deform(new THREE.SphereGeometry(0.74, 40, 32), variant, 0.82, 0.012);
+  else geo = deform(new THREE.SphereGeometry(0.86, 48, 36), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.01);
 
   geo.userData.shared = true;
   geoCache.set(variant, geo);

@@ -35,6 +35,7 @@ export function shadowsEnabled(software = false): boolean {
 }
 
 export function chooseSimGrid(): { w: number; h: number } {
+  if (wantHighQuality()) return { w: 320, h: 188 };
   if (isMobileGarden()) return { w: 128, h: 75 };
   return { w: 160, h: 94 };
 }
