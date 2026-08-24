@@ -38,10 +38,10 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.22,
-        elevation: 0.26,
-        zoom: 0.52,
-        tx: -2.7,
+        azimuth: 1.48,
+        elevation: 0.21,
+        zoom: 0.41,
+        tx: -2.55,
         tz: 1.88,
       });
     });
@@ -51,8 +51,8 @@ test.describe("screenshots", () => {
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
         azimuth: 0.52,
-        elevation: 0.55,
-        zoom: 1.85,
+        elevation: 0.48,
+        zoom: 1.7,
         tx: look.cx + 0.05,
         tz: look.cz + 0.22,
       });
@@ -63,8 +63,8 @@ test.describe("screenshots", () => {
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
         azimuth: 0.78,
-        elevation: 0.58,
-        zoom: 4.15,
+        elevation: 0.5,
+        zoom: 3.7,
         tx: 0.15,
         tz: 0.12,
       });

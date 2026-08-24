@@ -95,4 +95,4 @@ npm run cf:preview
 
 ## Stack
 
-TypeScript, Vite, Three.js. No React, no auth, no server store. Court mass is a height field (160×94 desktop, 128×75 mobile): rake tines scoop grit, banks receive that mass, then sand slumps at a 30° repose. The visible court is a packed cloud of millimetre grains that ride that field — not a painted plane, not plastic rake rails, not an atlas, and not 3D rock chips. Mobile draws fewer grains. Stones sit in the sand. Moss islands are lumpy mounds. Shadows skip on phones; DPR is capped. Rake UX is unchanged — freehand curves, snap-to-circles, straight pulls. No audio.
+TypeScript, Vite, Three.js. No React, no auth, no server store. Court mass is a height field (160×94 desktop, 128×75 mobile): rake tines scoop grit, banks receive that mass, then sand slumps at a 30° repose. The visible court is millimetre grit on a displaced packed floor: rake scoops the trough and stacks the banks, which then slump. Mobile draws fewer grains. Stones sit in the sand. Moss islands are lumpy mounds. Shadows skip on phones; DPR is capped. Rake UX is unchanged — freehand curves, snap-to-circles, straight pulls. No audio.

@@ -16,7 +16,11 @@ const TINE_GAP = 0.114;
 const TROUGH_SIGMA = 0.036;
 const RIDGE_OFF = 0.056;
 const RIDGE_SIGMA = 0.03;
-const RAKE_DEPTH = 0.042;
+const RAKE_DEPTH = 0.05;
+
+/** Displacement so the packed floor carries rake relief at court scale. */
+export const SAND_DISP_SCALE = H_RANGE * 0.92;
+export const SAND_DISP_BIAS = H_MIN * 0.92;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
@@ -38,7 +42,8 @@ interface Rect {
 
 /**
  * Court mass: a CPU height field with conservation rake and angle-of-repose
- * slump. The mesh is a packed-floor gap fill; visible sand is the grain cloud.
+ * slump. The mesh is the packed floor (displaced, troughs darker). Visible
+ * grit is the grain cloud: scooped from grooves, stacked on the banks.
  */
 export class SandField {
   readonly mesh: THREE.Mesh;
@@ -93,7 +98,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([216, 208, 196, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([210, 202, 190, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({
@@ -101,10 +106,14 @@ export class SandField {
       map: pale,
       roughness: 1,
       metalness: 0,
+      displacementMap: this.texture,
+      displacementScale: SAND_DISP_SCALE,
+      displacementBias: SAND_DISP_BIAS,
       envMapIntensity: 0,
       emissive: 0x000000,
       emissiveIntensity: 0,
     });
+    applyFloorShade(mat);
 
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = 1.5;
@@ -738,6 +747,22 @@ export class SandField {
     }
     return true;
   }
+}
+
+function applyFloorShade(mat: THREE.MeshStandardMaterial): void {
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <map_fragment>",
+      `#include <map_fragment>
+       float sandH = texture2D(displacementMap, vDisplacementMapUv).r;
+       float trough = smoothstep(0.56, 0.34, sandH);
+       float crest = smoothstep(0.5, 0.74, sandH);
+       diffuseColor.rgb *= mix(1.0, 0.58, trough);
+       diffuseColor.rgb += vec3(0.045, 0.035, 0.02) * crest;
+      `,
+    );
+  };
+  mat.customProgramCacheKey = () => "sand-floor-trough-ao-v1";
 }
 
 function hash2(x: number, y: number): number {
