@@ -41,10 +41,10 @@ export function chooseSimGrid(): { w: number; h: number } {
 
 /** Display mesh only — sim grid stays cheap for rake / slump. */
 export function chooseDisplayGrid(sim: { w: number; h: number }): { w: number; h: number } {
-  if (wantHighQuality()) return { w: 448, h: 262 };
+  if (wantHighQuality()) return { w: 320, h: 188 };
   if (isMobileGarden()) {
     return { w: Math.min(200, Math.round(sim.w * 1.5)), h: Math.min(118, Math.round(sim.h * 1.5)) };
   }
-  return { w: Math.min(320, sim.w * 2), h: Math.min(188, sim.h * 2) };
+  return { w: Math.min(280, sim.w * 2), h: Math.min(164, sim.h * 2) };
 }
 

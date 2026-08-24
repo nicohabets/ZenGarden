@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { chooseDisplayGrid, chooseSimGrid } from "./device";
-import { applyPackedSandShader, type SandLookUniforms } from "./gravelShader";
 import { mulberry32 } from "./rng";
 import { GARDEN, type Blocker, type SandTone } from "./types";
 
@@ -37,9 +36,13 @@ interface Rect {
   j1: number;
 }
 
+/** Displacement range used by the bed mesh and the visible grain cloud. */
+export const SAND_DISP_SCALE = H_RANGE * 0.9;
+export const SAND_DISP_BIAS = H_MIN * 0.9;
+
 /**
  * Court mass: a CPU height field with conservation rake and angle-of-repose
- * slump. Visible sand is packed millimetre grit (parallax) on this mesh.
+ * slump. The mesh is gap-fill only; visible sand is the grain cloud.
  */
 export class SandField {
   readonly mesh: THREE.Mesh;
@@ -60,7 +63,6 @@ export class SandField {
   private slumpRow = 0;
   private packNeeded = false;
   private occupantsDirty = false;
-  private readonly look: SandLookUniforms;
   private readonly cellX: number;
   private readonly cellZ: number;
   private readonly cellMin: number;
@@ -95,22 +97,26 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([236, 230, 218, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([214, 206, 192, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: pale,
-      roughness: 0.96,
+      roughness: 1,
       metalness: 0,
       displacementMap: this.texture,
-      displacementScale: H_RANGE * 0.9,
-      displacementBias: H_MIN * 0.9,
+      displacementScale: SAND_DISP_SCALE,
+      displacementBias: SAND_DISP_BIAS,
       envMapIntensity: 0,
-      emissive: 0x2a261e,
-      emissiveIntensity: 0.08,
+      emissive: 0x000000,
+      emissiveIntensity: 0,
+      flatShading: false,
     });
-    this.look = applyPackedSandShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE * 0.9);
+
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = 1.5;
+    mat.polygonOffsetUnits = 1.5;
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
@@ -419,14 +425,6 @@ export class SandField {
     return true;
   }
 
-  setLook(zoom: number): void {
-    this.look.uZoom.value = zoom;
-  }
-
-  getGrainCount(): number {
-    return Math.floor(GARDEN.width * GARDEN.depth * 340 * 220);
-  }
-
   dirtyWorld(): { x0: number; z0: number; x1: number; z1: number } | "all" | null {
     if (!this.dirty) return null;
     const full = this.dirty.i0 <= 2 && this.dirty.j0 <= 2 && this.dirty.i1 >= this.simW - 3 && this.dirty.j1 >= this.simH - 3;
@@ -660,8 +658,6 @@ export class SandField {
         let h = this.sampleBilinear(fi, fj);
         const ix = this.clampI(Math.floor(fi));
         const jz = this.clampJ(Math.floor(fj));
-        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.028 - 0.014;
-        h += grain;
         const dx = this.sampleDirX(ix, jz);
         const dz = this.sampleDirZ(ix, jz);
         const o = (j * dispW + i) * 4;
