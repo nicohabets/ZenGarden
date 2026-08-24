@@ -146,7 +146,9 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
     const ring = n.y < 0.72;
     const nxz = Math.hypot(v.x / 1.05, v.z / 1.04) || 1;
     if (ring) {
-      const target = skirt ? 1.08 : 1.0;
+      // Visible moss overshoots the keep-out so the first grit row
+      // tucks under the mound. Matching 1.0 left a beige shoreline.
+      const target = skirt ? 1.18 : 1.16;
       v.x = (v.x / nxz) * target;
       v.z = (v.z / nxz) * target;
     } else if (nxz > 1) {
@@ -229,7 +231,7 @@ export function createMoss(states: MossState[]): THREE.Group {
       new THREE.CylinderGeometry(1, 1, 0.1, 28, 1, false),
       new THREE.MeshBasicMaterial({ color: 0x4e6a38 }),
     );
-    under.scale.set(s.scale * MOSS_FOOT.x * 1.03, 1, s.scale * MOSS_FOOT.z * 1.03);
+    under.scale.set(s.scale * MOSS_FOOT.x * 1.2, 1, s.scale * MOSS_FOOT.z * 1.2);
     under.position.y = -0.05;
     under.userData.kind = "moss";
     island.add(under);

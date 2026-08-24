@@ -121,6 +121,30 @@ export class GrainCloud {
       0.18,
     );
 
+    // Hug each moss ellipse so the hex carpet cannot leave a beige
+    // shoreline the width of one spacing step.
+    const hugCap = Math.floor(this.maxCount * 0.97);
+    for (const b of blockers) {
+      if (!b.rx || !b.rz || n >= hugCap) continue;
+      const rot = b.rotY ?? 0;
+      const c = Math.cos(rot);
+      const s = Math.sin(rot);
+      const steps = hq ? 96 : 64;
+      for (let i = 0; i < steps && n < hugCap; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        for (const pad of [0.01, 0.024, 0.042, 0.064]) {
+          const lx = ca * (b.rx + pad);
+          const lz = sa * (b.rz + pad);
+          const gx = b.x + lx * c - lz * s;
+          const gz = b.z + lx * s + lz * c;
+          if (blocked(gx, gz, blockers)) continue;
+          n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 80) | 0, (gz * 80) | 0), 0);
+        }
+      }
+    }
+
     const pathStep = hq ? Math.max(spacing * 0.45, 0.0024) : Math.max(spacing * 0.85, 0.014);
     const troughCap = Math.floor(this.maxCount * 0.985);
     const troughHalf = Math.max(0.03, spacing * 5);
