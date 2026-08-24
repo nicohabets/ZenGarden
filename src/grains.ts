@@ -27,7 +27,6 @@ export class GrainCloud {
   private readonly maxCount: number;
   private count = 0;
   private lastKey = "";
-  private lastHeightAt = 0;
   private readonly xs: Float32Array;
   private readonly zs: Float32Array;
   private readonly hs: Float32Array;
@@ -67,13 +66,6 @@ export class GrainCloud {
     if (force || key !== this.lastKey) {
       this.lastKey = key;
       this.layout(cam, sand, blockers);
-      this.lastHeightAt = performance.now();
-      return;
-    }
-    const now = performance.now();
-    if (now - this.lastHeightAt > 140) {
-      this.lift(sand, cam);
-      this.lastHeightAt = now;
     }
   }
 
@@ -162,16 +154,6 @@ export class GrainCloud {
     this.seeds[n] = seed;
     this.layers[n] = layer;
     return n + 1;
-  }
-
-  private lift(sand: SandField, cam: CameraRig): void {
-    const bounds = slantBounds(cam);
-    const spanX = Math.max(0.1, bounds.x1 - bounds.x0);
-    const spanZ = Math.max(0.1, bounds.z1 - bounds.z0);
-    const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.4))));
-    const n = this.count;
-    for (let i = 0; i < n; i++) this.hs[i] = sand.sampleVisual(this.xs[i], this.zs[i]);
-    this.writeInstances(THREE.MathUtils.clamp(spacing * 2.15, 0.0014, 0.07));
   }
 
   private writeInstances(worldSize: number): void {
