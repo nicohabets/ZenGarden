@@ -98,7 +98,7 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([210, 202, 190, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([188, 180, 168, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
     const mat = new THREE.MeshStandardMaterial({
@@ -757,7 +757,7 @@ function applyFloorShade(mat: THREE.MeshStandardMaterial): void {
        float sandH = texture2D(displacementMap, vDisplacementMapUv).r;
        float trough = smoothstep(0.56, 0.34, sandH);
        float crest = smoothstep(0.5, 0.74, sandH);
-       diffuseColor.rgb *= mix(1.0, 0.58, trough);
+       diffuseColor.rgb *= mix(1.0, 0.42, trough);
        diffuseColor.rgb += vec3(0.045, 0.035, 0.02) * crest;
       `,
     );

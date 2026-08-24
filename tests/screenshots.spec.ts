@@ -31,16 +31,16 @@ test.describe("screenshots", () => {
       }
       api.rakeStroke(ring);
       api.rakeFromTo(-5.1, 1.88, 4.6, 1.88);
-      api.settleSand(24);
+      api.settleSand(8);
       return { cx, cz };
     });
     await page.waitForTimeout(400);
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 1.48,
-        elevation: 0.21,
-        zoom: 0.41,
+        azimuth: 0.08,
+        elevation: 0.2,
+        zoom: 0.39,
         tx: -2.55,
         tz: 1.88,
       });

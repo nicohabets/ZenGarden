@@ -98,8 +98,8 @@ export class GrainCloud {
         if (blocked(gx, gz, blockers)) continue;
         const seed = hash2(row * 17 + 4, n * 3 + 9);
         const h = sand.sampleHeight(gx, gz);
-        if (h < -0.022 && seed > 0.1) continue;
-        if (h < -0.01 && seed > 0.32) continue;
+        if (h < -0.018 && seed > 0.08) continue;
+        if (h < -0.008 && seed > 0.22) continue;
         this.xs[n] = gx;
         this.zs[n] = gz;
         this.seeds[n] = seed;
@@ -112,8 +112,8 @@ export class GrainCloud {
     const pileBudget = this.maxCount - n;
     for (let i = 0; i < surface && n < this.maxCount; i++) {
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
-      if (h < 0.007) continue;
-      const stacks = h > 0.028 ? 2 : 1;
+      if (h < 0.005) continue;
+      const stacks = h > 0.022 ? 3 : h > 0.01 ? 2 : 1;
       for (let layer = 1; layer <= stacks && n < this.maxCount && n - surface < pileBudget; layer++) {
         const seed = hash2(i + 19 + layer * 7, 23);
         this.xs[n] = this.xs[i] + (this.seeds[i] - 0.5) * spacing * 0.3;
@@ -143,8 +143,8 @@ export class GrainCloud {
       const seed = this.seeds[i];
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
       const layer = this.layers[i];
-      const y = GARDEN.sandY + h * 0.92 + 0.0014 + layer * (0.0024 + Math.max(0, h) * 0.05) + (seed - 0.5) * 0.001;
-      const s = worldSize * (0.78 + seed * 0.34);
+      const y = GARDEN.sandY + h * 0.92 + 0.0012 + layer * (0.0028 + Math.max(0, h) * 0.08) + (seed - 0.5) * 0.0008;
+      const s = worldSize * (0.7 + seed * 0.28);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 4.2, seed * 6.1, hash2(i + 3, 17) * 5.4);
       _dummy.scale.set(s * (0.9 + seed * 0.18), s * (0.62 + seed * 0.16), s * (0.84 + hash2(i, 9) * 0.2));
@@ -163,7 +163,7 @@ function makeGritGeometry(): THREE.BufferGeometry {
   const segs = isMobileGarden() && !wantHighQuality() ? 5 : 6;
   const rings = isMobileGarden() && !wantHighQuality() ? 4 : 5;
   const geo = new THREE.SphereGeometry(0.5, segs, rings);
-  geo.scale(1.02, 0.64, 0.9);
+  geo.scale(1.0, 0.82, 0.92);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
