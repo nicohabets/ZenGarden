@@ -7,7 +7,7 @@ import { FrameMeter } from "./perf";
 import { loadSave, writeSave } from "./persistence";
 import { RakeGuide, type RakeIsland, type RakePiece } from "./rake";
 import { GrainCloud } from "./grains";
-import { SAND_DISP_BIAS, SAND_DISP_SCALE, SandField } from "./sand";
+import { SandField } from "./sand";
 import {
   createApron,
   createBackdrop,
@@ -110,8 +110,7 @@ export class ZenGarden {
     this.scene.fog = new THREE.Fog(0xddd6c8, 24, 56);
 
     this.sand = new SandField();
-    this.grains = new GrainCloud(this.sand.texture);
-    this.grains.setDisplacement(SAND_DISP_SCALE, SAND_DISP_BIAS);
+    this.grains = new GrainCloud();
     this.seed = freshSeed();
 
     this.lights();
@@ -704,17 +703,7 @@ export class ZenGarden {
   }
 
   private syncGrains(force = false): void {
-    this.grains.sync(
-      this.cam.camera,
-      this.sand,
-      this.blockers(),
-      this.cam.zoom,
-      this.renderer.domElement.height,
-      this.cam.target.x,
-      this.cam.target.z,
-      this.cam.aspect,
-      force,
-    );
+    this.grains.sync(this.cam, this.sand, this.blockers(), this.renderer.domElement.height, force);
   }
 
   private playRakeStroke(points: Array<[number, number]>): RakeMode {
