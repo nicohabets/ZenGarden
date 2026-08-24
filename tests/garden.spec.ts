@@ -349,4 +349,38 @@ test.describe("Zen Garden", () => {
     expect(restored.tx).toBeCloseTo(0.35, 2);
     expect(restored.tz).toBeCloseTo(-0.18, 2);
   });
+
+  test("garden starts quickly and reports frame time", async ({ page }) => {
+    const t0 = Date.now();
+    await page.goto("/");
+    await waitForGarden(page);
+    expect(Date.now() - t0).toBeLessThan(12_000);
+
+    await page.waitForTimeout(450);
+    const perf = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const rake0 = performance.now();
+      api.rakeFromTo(-2.2, 1.4, 2.1, 1.4);
+      const rakeMs = performance.now() - rake0;
+      return { ...api.getPerf(), rakeMs };
+    });
+
+    expect(perf.simW).toBeLessThanOrEqual(160);
+    expect(perf.simH).toBeLessThanOrEqual(94);
+    expect(perf.samples).toBeGreaterThan(6);
+    expect(perf.avgFrameMs).toBeGreaterThan(0);
+    expect(perf.avgFrameMs).toBeLessThan(90);
+    expect(perf.fps).toBeGreaterThan(8);
+    expect(perf.readyMs).toBeLessThan(12_000);
+    expect(perf.rakeMs).toBeLessThan(80);
+
+    const attrs = await page.locator("#app").evaluate((el) => ({
+      fps: el.getAttribute("data-fps"),
+      frameMs: el.getAttribute("data-frame-ms"),
+      readyMs: el.getAttribute("data-ready-ms"),
+    }));
+    expect(Number(attrs.fps)).toBeGreaterThan(8);
+    expect(Number(attrs.frameMs)).toBeGreaterThan(0);
+    expect(Number(attrs.readyMs)).toBeGreaterThanOrEqual(0);
+  });
 });

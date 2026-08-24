@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { Bonsai } from "./bonsai";
 import { CameraRig } from "./camera";
+import { isMobileGarden, pixelRatioCap, shadowsEnabled } from "./device";
 import { generateWorld, inBounds, nextStoneId } from "./generate";
+import { FrameMeter } from "./perf";
 import { loadSave, writeSave } from "./persistence";
 import { RakeGuide, type RakeIsland, type RakePiece } from "./rake";
 import { SandField } from "./sand";
@@ -28,6 +30,7 @@ import {
   type MossState,
   type RakeMode,
   type StoneState,
+  type PerfStats,
   type ToolId,
   type ZenGardenAPI,
 } from "./types";
@@ -76,18 +79,21 @@ export class ZenGarden {
   private dragId: string | null = null;
   private saveTimer = 0;
   private disposed = false;
+  private readonly startedAt = performance.now();
+  private readonly meter = new FrameMeter();
+  private readonly useShadows = shadowsEnabled();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      antialias: !isMobileGarden(),
       alpha: false,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(pixelRatioCap());
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.enabled = shadowsEnabled();
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -122,7 +128,9 @@ export class ZenGarden {
     this.ui.setSeed(this.seed);
     this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
     this.resize();
+    this.meter.markReady(this.startedAt);
     this.ui.setReady(true, true);
+    this.publishPerf();
     this.exposeApi();
     this.tick();
   }
@@ -132,6 +140,7 @@ export class ZenGarden {
   }
 
   private plant(seed: number): void {
+    const t0 = performance.now();
     this.seed = seed;
     const world = generateWorld(seed);
     this.bonsaiState = { ...world.bonsai, pruned: [...world.bonsai.pruned] };
@@ -146,9 +155,10 @@ export class ZenGarden {
       this.sand.paintRing(island.x, island.z, island.innerR + 1.15, island.innerR, 0.165);
     }
     this.sand.embedOccupants(this.occupants());
-    this.sand.settle(10);
+    this.sand.settle(6);
     this.sand.flush();
     this.settleOccupants();
+    this.meter.plantMs = performance.now() - t0;
     this.ui.setSeed(seed);
   }
 
@@ -196,28 +206,23 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf6f2ea, 0x6a6458, 0.55);
+    const hemi = new THREE.HemisphereLight(0xf6f2ea, 0x6a6458, 0.62);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1dc, 1.55);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 1.48);
     sun.position.set(16.8, 3.7, 7.2);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 48;
-    sun.shadow.camera.left = -14;
-    sun.shadow.camera.right = 14;
-    sun.shadow.camera.top = 12;
-    sun.shadow.camera.bottom = -12;
-    sun.shadow.bias = -0.00045;
-    sun.shadow.normalBias = 0.025;
+    sun.castShadow = this.useShadows;
+    if (this.useShadows) {
+      sun.shadow.mapSize.set(1024, 1024);
+      sun.shadow.camera.near = 2;
+      sun.shadow.camera.far = 40;
+      sun.shadow.camera.left = -11;
+      sun.shadow.camera.right = 11;
+      sun.shadow.camera.top = 9;
+      sun.shadow.camera.bottom = -9;
+      sun.shadow.bias = -0.0005;
+      sun.shadow.normalBias = 0.03;
+    }
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xd0d6dc, 0.32);
-    fill.position.set(-9, 5.4, -5);
-    this.scene.add(fill);
-    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.16);
-    rim.position.set(2, 3.2, -9);
-    this.scene.add(rim);
-    this.scene.add(new THREE.AmbientLight(0xe8e2d6, 0.22));
   }
 
   private bindUi(): void {
@@ -394,24 +399,18 @@ export class ZenGarden {
   private onUp(e: PointerEvent): void {
     this.pointers.delete(e.pointerId);
     if (this.mode === "rake") {
-      this.sand.settle(8);
-      this.sand.flush();
-      this.settleOccupants();
+      this.sand.queueSlump(6);
       this.scheduleSave(true);
     } else if (this.mode === "drag-stone") {
       if (this.dragId) {
         const s = this.stones.get(this.dragId);
         if (s) this.sand.bankObject(s.x, s.z, 0.28 + s.scale * 0.2, 0.016, 0.018);
       }
-      this.sand.settle(6);
-      this.sand.flush();
-      this.settleOccupants();
+      this.sand.queueSlump(4);
       this.scheduleSave(true);
     } else if (this.mode === "drag-bonsai") {
       this.sand.bankObject(this.bonsaiState.x, this.bonsaiState.z, 0.58, 0.014, 0.016);
-      this.sand.settle(4);
-      this.sand.flush();
-      this.settleOccupants();
+      this.sand.queueSlump(3);
       this.scheduleSave(true);
     } else if (this.mode === "orbit" || this.mode === "pan" || this.mode === "pinch") {
       this.scheduleSave();
@@ -449,9 +448,7 @@ export class ZenGarden {
     };
     this.stones.add(state);
     this.sand.bankObject(x, z, 0.28 + state.scale * 0.2, 0.016, 0.018);
-    this.sand.settle(5);
-    this.sand.flush();
-    this.settleOccupants();
+    this.sand.queueSlump(3);
     this.scheduleSave(true);
     return true;
   }
@@ -588,7 +585,7 @@ export class ZenGarden {
   private resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(pixelRatioCap());
     this.renderer.setSize(w, h, false);
     this.cam.setAspect(w / Math.max(1, h));
   }
@@ -605,7 +602,21 @@ export class ZenGarden {
     if (this.basinGroup) updateWater(this.basinGroup, this.waterTime);
     if (this.lanternGroup) updateLanterns(this.lanternGroup, this.waterTime);
     this.renderer.render(this.scene, this.cam.camera);
+    this.meter.sample();
+    if (this.meter.shouldPublish()) this.publishPerf();
   };
+
+  private publishPerf(): void {
+    const stats = this.meter.stats(this.sand.simW, this.sand.simH, this.useShadows);
+    const app = this.ui.app;
+    app.dataset.fps = stats.fps.toFixed(0);
+    app.dataset.frameMs = stats.avgFrameMs.toFixed(1);
+    app.dataset.readyMs = String(Math.round(stats.readyMs));
+  }
+
+  private readPerf(): PerfStats {
+    return this.meter.stats(this.sand.simW, this.sand.simH, this.useShadows);
+  }
 
   private exposeApi(): void {
     const api: ZenGardenAPI = {
@@ -640,12 +651,13 @@ export class ZenGarden {
       sampleHeight: (x, z) => this.sand.sampleHeight(x, z),
       getSandVolume: () => this.sand.getSandVolume(),
       settleSand: (steps) => {
-        this.sand.settle(steps ?? 24);
+        this.sand.settle(steps ?? 8);
         this.sand.flush();
         this.settleOccupants();
         this.scheduleSave(true);
       },
       getSandTone: () => this.sand.getSandTone(),
+      getPerf: () => this.readPerf(),
       getMossCount: () => this.mossStates.length,
       getCamera: () => this.cam.toState(),
       setCamera: (state) => {
@@ -675,7 +687,7 @@ export class ZenGarden {
     for (let i = 1; i < points.length; i++) {
       this.applyRake(guide.feed(points[i][0], points[i][1], islands));
     }
-    this.sand.settle(6);
+    this.sand.settle(4);
     this.sand.flush();
     this.settleOccupants();
     this.scheduleSave(true);

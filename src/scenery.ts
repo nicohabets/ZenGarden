@@ -68,7 +68,7 @@ export function createFrame(): THREE.Group {
 }
 
 function islandGeometry(seed: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 32, 22);
+  const geo = new THREE.SphereGeometry(1, 20, 14);
   const rng = mulberry32(seed);
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
@@ -151,7 +151,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     soil.scale.set(s.scale * 0.62, s.scale * 0.22, s.scale * 0.54);
     soil.position.y = -0.01;
     soil.receiveShadow = true;
-    soil.castShadow = true;
+    soil.castShadow = false;
     soil.userData.kind = "moss";
     island.add(soil);
 
@@ -159,11 +159,11 @@ export function createMoss(states: MossState[]): THREE.Group {
     moss.scale.set(s.scale * 0.55, s.scale * 0.32, s.scale * 0.48);
     moss.position.y = 0.01;
     moss.receiveShadow = true;
-    moss.castShadow = true;
+    moss.castShadow = false;
     moss.userData.kind = "moss";
     island.add(moss);
 
-    const pillows = 2 + ((seed >> 3) % 3);
+    const pillows = 1 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {
       const bump = new THREE.Mesh(islandGeometry(seed ^ (17 + p * 13)), mossMat);
       bump.scale.set(s.scale * randRange(rng, 0.16, 0.28), s.scale * randRange(rng, 0.08, 0.14), s.scale * randRange(rng, 0.14, 0.24));
@@ -288,9 +288,6 @@ export function createLantern(state: LanternState): THREE.Group {
   roof.userData.kind = "lantern";
   group.add(roof);
 
-  const light = new THREE.PointLight(0xffc878, 0.4, 4.2, 2);
-  light.position.y = 0.44;
-  group.add(light);
   return group;
 }
 
@@ -326,17 +323,17 @@ export function createBackdrop(): THREE.Group {
 
   const back = new THREE.Mesh(new THREE.BoxGeometry(backW, wallH, thick), clay);
   back.position.set(0, wallY, backZ);
-  back.castShadow = true;
+  back.castShadow = false;
   group.add(back);
 
   const left = new THREE.Mesh(new THREE.BoxGeometry(thick, wallH, sideL), clay);
   left.position.set(-sideX, wallY, -0.2);
-  left.castShadow = true;
+  left.castShadow = false;
   group.add(left);
 
   const right = new THREE.Mesh(new THREE.BoxGeometry(thick, wallH, sideL), clay);
   right.position.set(sideX, wallY, -0.2);
-  right.castShadow = true;
+  right.castShadow = false;
   group.add(right);
 
   const deck = new THREE.Mesh(

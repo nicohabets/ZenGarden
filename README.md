@@ -95,4 +95,4 @@ npm run cf:preview
 
 ## Stack
 
-TypeScript, Vite, Three.js. No React, no auth, no server store. The court is a volumetric height field: rake tines displace gravel (volume is conserved), then dry sand slumps to an angle of repose. A GPU-displaced mesh and a pebble shader read that field. Stones sit in the gravel. Moss islands are lumpy mounds, not discs. Rake UX is unchanged — freehand curves, snap-to-circles, straight pulls. No audio.
+TypeScript, Vite, Three.js. No React, no auth, no server store. The court is a volumetric height field (160×94 desktop, 128×75 mobile): rake tines displace gravel, then sand slumps in small per-frame bursts. Grain lives in the shader. Stones sit in the gravel. Moss islands are lumpy mounds. Shadows skip on phones; DPR is capped. Rake UX is unchanged — freehand curves, snap-to-circles, straight pulls. No audio.

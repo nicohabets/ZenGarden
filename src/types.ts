@@ -96,6 +96,18 @@ export interface SandTone {
   luma: number;
 }
 
+export interface PerfStats {
+  fps: number;
+  frameMs: number;
+  avgFrameMs: number;
+  readyMs: number;
+  plantMs: number;
+  simW: number;
+  simH: number;
+  shadows: boolean;
+  samples: number;
+}
+
 export interface ZenGardenAPI {
   ready: boolean;
   getSeed(): number;
@@ -119,6 +131,7 @@ export interface ZenGardenAPI {
   getSandVolume(): number;
   settleSand(steps?: number): void;
   getSandTone(): SandTone;
+  getPerf(): PerfStats;
   getMossCount(): number;
   getCamera(): CameraState;
   setCamera(state: Partial<CameraState>): void;

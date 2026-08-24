@@ -1,7 +1,8 @@
 import * as THREE from "three";
-import { GARDEN, type Blocker, type SandTone } from "./types";
-import { mulberry32 } from "./rng";
+import { chooseSimGrid } from "./device";
 import { applyGravelShader } from "./gravelShader";
+import { mulberry32 } from "./rng";
+import { GARDEN, type Blocker, type SandTone } from "./types";
 
 /** Packed height+rake-direction payload for localStorage. */
 export const HEIGHT_PREFIX = "hf1:";
@@ -36,17 +37,8 @@ interface Rect {
   j1: number;
 }
 
-function chooseSimGrid(): { w: number; h: number } {
-  const mobile =
-    typeof window !== "undefined" &&
-    (window.innerWidth < 720 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
-  if (mobile) return { w: 192, h: 112 };
-  return { w: 256, h: 150 };
-}
-
-function chooseDisplayGrid(simW: number): { w: number; h: number } {
-  if (simW <= 192) return { w: 256, h: 150 };
-  return { w: 384, h: 225 };
+function chooseDisplayGrid(sim: { w: number; h: number }): { w: number; h: number } {
+  return { w: sim.w, h: sim.h };
 }
 
 /**
@@ -65,7 +57,10 @@ export class SandField {
   private readonly field: Uint8Array<ArrayBuffer>;
   private readonly scratch: Float32Array;
   private dirty: Rect | null = null;
+  private slumpRect: Rect | null = null;
   private slumpLeft = 0;
+  private slumpRow = 0;
+  private packNeeded = false;
   private occupantsDirty = false;
   private readonly cellX: number;
   private readonly cellZ: number;
@@ -95,7 +90,7 @@ export class SandField {
     this.texture.needsUpdate = true;
     this.texture.flipY = true;
 
-    const display = chooseDisplayGrid(sim.w);
+    const display = chooseDisplayGrid(sim);
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
@@ -118,9 +113,8 @@ export class SandField {
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = true;
-    this.mesh.castShadow = true;
+    this.mesh.castShadow = false;
     this.mesh.userData.kind = "sand";
-    this.mesh.customDepthMaterial = depthMaterial(this.texture);
 
     this.markAllDirty();
   }
@@ -140,7 +134,7 @@ export class SandField {
       this.dirZ[i] = 0;
     }
     this.markAllDirty();
-    this.slumpLeft = 4;
+    this.queueSlump(3);
   }
 
   worldToUv(x: number, z: number): { u: number; v: number } {
@@ -186,21 +180,21 @@ export class SandField {
       return;
     }
     this.carveSegment(fromX, fromZ, toX, toZ, blockers, RAKE_DEPTH, true);
-    this.slumpLeft = Math.max(this.slumpLeft, 10);
+    this.queueSlump(4);
   }
 
   rakeArc(cx: number, cz: number, radius: number, a0: number, a1: number, blockers: Blocker[]): void {
     const sweep = a1 - a0;
     if (Math.abs(sweep) < 0.008 || radius < 0.12) return;
     this.carveArc(cx, cz, radius, a0, a1, blockers, RAKE_DEPTH, false);
-    this.slumpLeft = Math.max(this.slumpLeft, 10);
+    this.queueSlump(4);
   }
 
   paintRing(wx: number, wz: number, radiusWorld: number, innerWorld = 0.42, tineGap = 0.165): void {
     for (let r = innerWorld + tineGap; r < radiusWorld; r += tineGap) {
       this.carveArc(wx, wz, r, 0, Math.PI * 2, [], RAKE_DEPTH * 0.92, true);
     }
-    this.slumpLeft = Math.max(this.slumpLeft, 8);
+    this.queueSlump(4);
   }
 
   paintParallel(seed: number): void {
@@ -231,7 +225,7 @@ export class SandField {
       }
     }
     this.expandDirty(i0, j0, i1, j1);
-    this.slumpLeft = Math.max(this.slumpLeft, 10);
+    this.queueSlump(4);
   }
 
   embedOccupants(items: Occupant[]): void {
@@ -239,7 +233,7 @@ export class SandField {
       this.bankObject(it.x, it.z, it.r, it.pile ?? 0.02, it.sink ?? 0.022);
     }
     this.occupantsDirty = true;
-    this.slumpLeft = Math.max(this.slumpLeft, 12);
+    this.queueSlump(4);
   }
 
   bankObject(x: number, z: number, radius: number, pile: number, sink: number): void {
@@ -285,31 +279,47 @@ export class SandField {
     this.expandDirty(i0, j0, i1, j1);
   }
 
-  settle(steps = 12): void {
-    this.slumpRegion(this.dirty ?? this.fullRect(), steps);
-    this.clampHeights();
+  settle(steps = 8): void {
+    const rect = this.slumpRect ?? this.dirty ?? this.fullRect();
+    this.slumpRegion(rect, steps);
+    this.clampRect(rect);
     this.packTexture();
+    this.slumpLeft = 0;
     this.occupantsDirty = true;
   }
 
-  stepSlump(dt: number): void {
-    if (this.slumpLeft <= 0 && !this.dirty) return;
-    const steps = this.slumpLeft > 0 ? Math.min(4, this.slumpLeft) : 1;
-    const rect = this.dirty ?? this.fullRect();
-    const pad = 2;
-    const expanded = {
-      i0: Math.max(1, rect.i0 - pad),
-      j0: Math.max(1, rect.j0 - pad),
-      i1: Math.min(this.simW - 2, rect.i1 + pad),
-      j1: Math.min(this.simH - 2, rect.j1 + pad),
-    };
-    this.slumpRegion(expanded, Math.max(1, steps));
-    if (this.slumpLeft > 0) this.slumpLeft = Math.max(0, this.slumpLeft - steps);
-    if (dt > 0 && this.slumpLeft === 0 && (this.dirty || Math.random() < 0.08)) {
-      this.slumpRegion(this.dirty ?? this.fullRect(), 1);
+  queueSlump(steps = 6): void {
+    this.slumpLeft = Math.max(this.slumpLeft, steps);
+    this.slumpRect = this.dirty ? copyRect(this.dirty) : this.slumpRect;
+    this.slumpRow = this.slumpRect?.j0 ?? 1;
+  }
+
+  stepSlump(_dt: number): void {
+    if (this.slumpLeft <= 0) return;
+    const rect = this.slumpRect ?? this.dirty;
+    if (!rect) {
+      this.slumpLeft = 0;
+      return;
     }
-    this.clampHeights();
-    this.occupantsDirty = true;
+    const cells = (rect.i1 - rect.i0 + 1) * (rect.j1 - rect.j0 + 1);
+    if (cells <= 720) {
+      this.slumpRegion(rect, 1);
+      this.clampRect(rect);
+      this.slumpLeft -= 1;
+    } else {
+      const bandH = 8;
+      const j0 = this.slumpRow;
+      const j1 = Math.min(rect.j1, j0 + bandH - 1);
+      this.slumpRegion({ i0: rect.i0, j0, i1: rect.i1, j1 }, 1);
+      this.clampRect({ i0: rect.i0, j0, i1: rect.i1, j1 });
+      this.slumpRow = j1 + 1;
+      if (this.slumpRow > rect.j1) {
+        this.slumpRow = rect.j0;
+        this.slumpLeft -= 1;
+      }
+    }
+    this.packNeeded = true;
+    if (this.slumpLeft <= 0) this.occupantsDirty = true;
   }
 
   consumeOccupantSettle(): boolean {
@@ -396,9 +406,9 @@ export class SandField {
   }
 
   flush(): void {
-    if (!this.dirty && this.slumpLeft <= 0) return;
+    if (!this.packNeeded) return;
     this.packTexture();
-    this.dirty = null;
+    this.packNeeded = false;
   }
 
   private importPacked(payload: string): boolean {
@@ -593,10 +603,17 @@ export class SandField {
     this.expandDirty(i0, j0, i1, j1);
   }
 
-  private clampHeights(): void {
-    for (let i = 0; i < this.height.length; i++) {
-      const v = this.height[i];
-      this.height[i] = v < H_MIN ? H_MIN : v > H_MAX ? H_MAX : v;
+  private clampRect(rect: Rect): void {
+    const i0 = Math.max(0, rect.i0);
+    const i1 = Math.min(this.simW - 1, rect.i1);
+    const j0 = Math.max(0, rect.j0);
+    const j1 = Math.min(this.simH - 1, rect.j1);
+    for (let j = j0; j <= j1; j++) {
+      const row = j * this.simW;
+      for (let i = i0; i <= i1; i++) {
+        const v = this.height[row + i];
+        this.height[row + i] = v < H_MIN ? H_MIN : v > H_MAX ? H_MAX : v;
+      }
     }
   }
 
@@ -658,17 +675,21 @@ export class SandField {
 
   private markAllDirty(): void {
     this.dirty = this.fullRect();
+    this.slumpRect = copyRect(this.dirty);
+    this.packNeeded = true;
   }
 
   private expandDirty(i0: number, j0: number, i1: number, j1: number): void {
     if (!this.dirty) {
       this.dirty = { i0, j0, i1, j1 };
-      return;
+    } else {
+      this.dirty.i0 = Math.min(this.dirty.i0, i0);
+      this.dirty.j0 = Math.min(this.dirty.j0, j0);
+      this.dirty.i1 = Math.max(this.dirty.i1, i1);
+      this.dirty.j1 = Math.max(this.dirty.j1, j1);
     }
-    this.dirty.i0 = Math.min(this.dirty.i0, i0);
-    this.dirty.j0 = Math.min(this.dirty.j0, j0);
-    this.dirty.i1 = Math.max(this.dirty.i1, i1);
-    this.dirty.j1 = Math.max(this.dirty.j1, j1);
+    this.slumpRect = this.slumpRect ? unionRect(this.slumpRect, this.dirty) : copyRect(this.dirty);
+    this.packNeeded = true;
   }
 
   private clearOfBlockers(x: number, z: number, blockers: Blocker[]): boolean {
@@ -712,14 +733,17 @@ function angleInSweep(ang: number, a0: number, sweep: number): boolean {
   return d <= 0.02 && d >= sweep - 0.02;
 }
 
-function depthMaterial(map: THREE.DataTexture): THREE.MeshDepthMaterial {
-  const mat = new THREE.MeshDepthMaterial({
-    depthPacking: THREE.RGBADepthPacking,
-    displacementMap: map,
-    displacementScale: H_RANGE,
-    displacementBias: H_MIN,
-  });
-  return mat;
+function copyRect(r: Rect): Rect {
+  return { i0: r.i0, j0: r.j0, i1: r.i1, j1: r.j1 };
+}
+
+function unionRect(a: Rect, b: Rect): Rect {
+  return {
+    i0: Math.min(a.i0, b.i0),
+    j0: Math.min(a.j0, b.j0),
+    i1: Math.max(a.i1, b.i1),
+    j1: Math.max(a.j1, b.j1),
+  };
 }
 
 function stddev(values: number[]): number {
