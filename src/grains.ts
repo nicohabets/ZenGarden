@@ -104,7 +104,7 @@ export class GrainCloud {
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
         const h = sand.sampleVisual(gx, gz);
-        if (h < -0.016 && keep < 0.55) continue;
+        if (h < -0.02 && keep < 0.35) continue;
         n = this.pushGrain(n, gx, gz, h, keep, 0);
         if (h > -0.004 && keep > 0.55 && n < cellBudget) {
           const ang = hash2(row + 13, col + 31) * Math.PI * 2;
