@@ -28,7 +28,7 @@ Tools:
 
 ## Persist
 
-World state is written to `localStorage` (`zengarden.v1`) whenever you rake, place, prune, water, move, or leave the page. Returning to the same browser restores the sand, stones, bonsai, and camera. Clearing site data starts a new garden. Nothing is sent to a server.
+World state is written to `localStorage` (`zengarden.v1`) whenever you rake, place, prune, water, move, or leave the page. The gravel court is a compressed height field (`hf1` / `hf1r`); if the quota is tight the save slims the sand and keeps the rest. Returning to the same browser restores the sand, stones, bonsai, and camera. Clearing site data starts a new garden. Nothing is sent to a server.
 
 ## Develop
 
@@ -95,4 +95,4 @@ npm run cf:preview
 
 ## Stack
 
-TypeScript, Vite, Three.js. No React, no auth, no server store. The garden is an orthographic (isometric) scene with a rakeable gravel texture (concentric rings around islands, plus freehand and straight grooves), irregular garden stones, moss islands, a water basin, and a bonsai you can water, prune, and move.
+TypeScript, Vite, Three.js. No React, no auth, no server store. The court is a volumetric height field (160×94 desktop, 128×75 mobile): rake tines displace gravel, then sand slumps in small per-frame bursts. Grain lives in the shader. Stones sit in the gravel. Moss islands are lumpy mounds. Shadows skip on phones; DPR is capped. Rake UX is unchanged — freehand curves, snap-to-circles, straight pulls. No audio.

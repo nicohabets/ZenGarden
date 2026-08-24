@@ -96,6 +96,18 @@ export interface SandTone {
   luma: number;
 }
 
+export interface PerfStats {
+  fps: number;
+  frameMs: number;
+  avgFrameMs: number;
+  readyMs: number;
+  plantMs: number;
+  simW: number;
+  simH: number;
+  shadows: boolean;
+  samples: number;
+}
+
 export interface ZenGardenAPI {
   ready: boolean;
   getSeed(): number;
@@ -115,7 +127,11 @@ export interface ZenGardenAPI {
   rakeStroke(points: Array<[number, number]>): RakeMode;
   sampleGrooveDeviation(x1: number, z1: number, x2: number, z2: number): number;
   sampleArcDeviation(cx: number, cz: number, radius: number, a0?: number, a1?: number): number;
+  sampleHeight(x: number, z: number): number;
+  getSandVolume(): number;
+  settleSand(steps?: number): void;
   getSandTone(): SandTone;
+  getPerf(): PerfStats;
   getMossCount(): number;
   getCamera(): CameraState;
   setCamera(state: Partial<CameraState>): void;

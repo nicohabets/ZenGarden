@@ -5,8 +5,8 @@ import { GARDEN, type StoneState } from "./types";
 type Lithology = "granite" | "basalt";
 type Shape = "slab" | "standing" | "pebble" | "angular" | "boulder";
 
-const GRANITE = [0xb8b0a6, 0xc4bbb0, 0xa8a098, 0xbbb4aa, 0x9a938a];
-const BASALT = [0x6a6662, 0x585450, 0x747068, 0x4c4a46, 0x64625c];
+const GRANITE = [0xd4ccc2, 0xe0d8ce, 0xc8c0b6, 0xddd6cc, 0xbeb8ae];
+const BASALT = [0x8e8a84, 0x7c7872, 0x9a968e, 0x726e68, 0x86827c];
 
 const geoCache = new Map<number, THREE.BufferGeometry>();
 let graniteTex: THREE.CanvasTexture | null = null;
@@ -37,7 +37,7 @@ function rockTexture(kind: Lithology): THREE.CanvasTexture {
   if (!ctx) throw new Error("stone texture");
 
   if (kind === "granite") {
-    ctx.fillStyle = "#b4aca2";
+    ctx.fillStyle = "#c8c0b6";
     ctx.fillRect(0, 0, size, size);
     for (let i = 0; i < 4200; i++) {
       const x = (i * 37 + 11) % size;
@@ -61,7 +61,7 @@ function rockTexture(kind: Lithology): THREE.CanvasTexture {
       ctx.fillRect((i * 41) % size, (i * 67 + 9) % size, 2, 1);
     }
   } else {
-    ctx.fillStyle = "#5e5a56";
+    ctx.fillStyle = "#7a7670";
     ctx.fillRect(0, 0, size, size);
     for (let i = 0; i < 2600; i++) {
       const x = (i * 29 + 7) % size;
@@ -98,8 +98,8 @@ function deform(geo: THREE.BufferGeometry, variant: number, flattenY: number, ch
   const litho = lithologyOf(variant);
   const palette = litho === "granite" ? GRANITE : BASALT;
   const base = new THREE.Color(palette[variant % palette.length]);
-  const fleck = new THREE.Color(litho === "granite" ? 0xe6dcd0 : 0x2e2c2a);
-  const moss = new THREE.Color(0x4a5840);
+  const fleck = new THREE.Color(litho === "granite" ? 0xf0e8dc : 0x4a4844);
+  const moss = new THREE.Color(0x5a6c48);
   const stretchX = 0.88 + (variant % 5) * 0.05;
   const stretchZ = 0.9 + ((variant * 3) % 4) * 0.04;
 
@@ -107,20 +107,20 @@ function deform(geo: THREE.BufferGeometry, variant: number, flattenY: number, ch
     v.fromBufferAttribute(pos, i);
     n.copy(v).normalize();
     const ridges =
-      0.09 * Math.sin(v.x * 2.6 + v.z * 1.7 + variant) +
-      0.055 * Math.cos(v.y * 3.1 + v.x * 2.1 + variant * 0.5) +
-      0.03 * Math.sin(v.x * 6.2 + v.z * 5.4 + variant * 1.3);
+      0.045 * Math.sin(v.x * 2.2 + v.z * 1.5 + variant) +
+      0.028 * Math.cos(v.y * 2.4 + v.x * 1.8 + variant * 0.5) +
+      0.016 * Math.sin(v.x * 4.6 + v.z * 4.1 + variant * 1.3);
     v.addScaledVector(n, ridges + chips * (rng() - 0.5));
     v.x *= stretchX;
     v.z *= stretchZ;
     v.y *= flattenY;
-    if (v.y < -0.4) v.y = -0.4;
+    if (v.y < -0.28) v.y = -0.28;
     pos.setXYZ(i, v.x, v.y, v.z);
 
     const c = base.clone();
-    if (rng() > 0.86) c.lerp(fleck, 0.42);
-    if (v.y < -0.08 && n.y < 0.15 && rng() > 0.55) c.lerp(moss, 0.38);
-    else if (v.y > 0.1 && n.y > 0.35 && rng() > 0.82) c.lerp(moss, 0.16);
+    if (rng() > 0.86) c.lerp(fleck, 0.28);
+    if (v.y < -0.12 && n.y < 0.12 && rng() > 0.7) c.lerp(moss, 0.18);
+    else if (v.y > 0.12 && n.y > 0.4 && rng() > 0.88) c.lerp(moss, 0.1);
     color.setXYZ(i, c.r, c.g, c.b);
   }
   geo.setAttribute("color", color);
@@ -134,11 +134,11 @@ export function createStoneGeometry(variant: number): THREE.BufferGeometry {
 
   const shape = shapeOf(variant);
   let geo: THREE.BufferGeometry;
-  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 6, 3, 5), variant, 0.94, 0.07);
-  else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 1), variant, 1.42, 0.06);
-  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 18, 14), variant, 0.56, 0.045);
-  else if (shape === "angular") geo = deform(new THREE.DodecahedronGeometry(0.74, 1), variant, 0.8, 0.09);
-  else geo = deform(new THREE.IcosahedronGeometry(0.9, 2), variant, variant % 3 === 0 ? 0.62 : 0.78, 0.07);
+  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 10, 5, 8), variant, 0.94, 0.03);
+  else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 3), variant, 1.36, 0.028);
+  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 28, 20), variant, 0.56, 0.022);
+  else if (shape === "angular") geo = deform(new THREE.DodecahedronGeometry(0.74, 3), variant, 0.82, 0.034);
+  else geo = deform(new THREE.IcosahedronGeometry(0.9, 3), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.028);
 
   geo.userData.shared = true;
   geoCache.set(variant, geo);
@@ -152,20 +152,20 @@ function sharedMoss(): {
   collar: THREE.BufferGeometry;
 } {
   mossMat ??= new THREE.MeshStandardMaterial({
-    color: 0x3f4c34,
-    roughness: 0.98,
-    metalness: 0,
-    flatShading: false,
-  });
-  lichenMat ??= new THREE.MeshStandardMaterial({
-    color: 0x6a6844,
+    color: 0x5a7044,
     roughness: 0.96,
     metalness: 0,
     flatShading: false,
   });
-  mossGeo ??= new THREE.IcosahedronGeometry(0.16, 1);
+  lichenMat ??= new THREE.MeshStandardMaterial({
+    color: 0x7a7a50,
+    roughness: 0.94,
+    metalness: 0,
+    flatShading: false,
+  });
+  mossGeo ??= new THREE.IcosahedronGeometry(0.16, 2);
   mossGeo.userData.shared = true;
-  collarGeo ??= new THREE.SphereGeometry(0.42, 14, 10);
+  collarGeo ??= new THREE.SphereGeometry(0.42, 18, 12);
   collarGeo.userData.shared = true;
   return { moss: mossMat, lichen: lichenMat, geo: mossGeo, collar: collarGeo };
 }
@@ -175,8 +175,8 @@ function addLichen(mesh: THREE.Mesh, state: StoneState): void {
   const { moss, lichen, geo, collar } = sharedMoss();
 
   const base = new THREE.Mesh(collar, moss);
-  base.position.set(0, -0.22, 0.02);
-  base.scale.set(0.95 + rng() * 0.2, 0.16 + rng() * 0.05, 0.82 + rng() * 0.18);
+  base.position.set(0, -0.28, 0.02);
+  base.scale.set(0.72 + rng() * 0.12, 0.07 + rng() * 0.03, 0.62 + rng() * 0.1);
   base.rotation.y = rng() * Math.PI;
   base.receiveShadow = true;
   base.userData.kind = "stone";
@@ -184,8 +184,8 @@ function addLichen(mesh: THREE.Mesh, state: StoneState): void {
   base.userData.mossBase = true;
   mesh.add(base);
 
-  if (state.variant % 3 === 1) return;
-  const count = 1 + (state.variant % 2);
+  if (state.variant % 2 === 1) return;
+  const count = 1;
   for (let i = 0; i < count; i++) {
     const patch = new THREE.Mesh(geo, rng() > 0.4 ? moss : lichen);
     patch.position.set(rng() * 0.26 - 0.13, 0.16 + rng() * 0.1, rng() * 0.2 - 0.08);
@@ -208,13 +208,13 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
     color: 0xffffff,
     map: tex,
     bumpMap: tex,
-    bumpScale: litho === "granite" ? 0.12 : 0.16,
-    displacementMap: tex,
-    displacementScale: litho === "granite" ? 0.028 : 0.022,
-    roughness: litho === "granite" ? 0.86 : 0.93,
-    metalness: litho === "granite" ? 0.04 : 0.02,
+    bumpScale: litho === "granite" ? 0.1 : 0.12,
+    roughness: litho === "granite" ? 0.78 : 0.86,
+    metalness: litho === "granite" ? 0.06 : 0.03,
+    emissive: litho === "granite" ? 0x8a8278 : 0x5c5852,
+    emissiveIntensity: 0.62,
     vertexColors: true,
-    flatShading: shape === "angular",
+    flatShading: false,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
@@ -228,7 +228,7 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
   return mesh;
 }
 
-export function applyStoneTransform(mesh: THREE.Mesh, state: StoneState): void {
+export function applyStoneTransform(mesh: THREE.Mesh, state: StoneState, sandHeight = 0): void {
   const shape = shapeOf(state.variant);
   const h =
     shape === "standing"
@@ -236,7 +236,8 @@ export function applyStoneTransform(mesh: THREE.Mesh, state: StoneState): void {
       : shape === "slab"
         ? 0.13 + state.scale * 0.09
         : 0.2 + state.scale * 0.2;
-  mesh.position.set(state.x, GARDEN.sandY + h * 0.28, state.z);
+  const embed = shape === "standing" ? 0.14 : shape === "slab" ? 0.08 : 0.11;
+  mesh.position.set(state.x, GARDEN.sandY + sandHeight + h * 0.18 - embed, state.z);
   const tiltX = state.tiltX ?? (shape === "slab" ? 0.03 : 0.06);
   const tiltZ = state.tiltZ ?? 0.02;
   mesh.rotation.set(tiltX, state.rotY, tiltZ);
@@ -263,13 +264,20 @@ export class StoneField {
     return mesh;
   }
 
-  move(id: string, x: number, z: number): void {
+  move(id: string, x: number, z: number, sandHeight = 0): void {
     const state = this.stones.find((s) => s.id === id);
     const mesh = this.meshes.get(id);
     if (!state || !mesh) return;
     state.x = x;
     state.z = z;
-    applyStoneTransform(mesh, state);
+    applyStoneTransform(mesh, state, sandHeight);
+  }
+
+  settleToSand(sample: (x: number, z: number) => number): void {
+    for (const state of this.stones) {
+      const mesh = this.meshes.get(state.id);
+      if (mesh) applyStoneTransform(mesh, state, sample(state.x, state.z));
+    }
   }
 
   get(id: string): StoneState | undefined {

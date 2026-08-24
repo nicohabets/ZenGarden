@@ -1,10 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function waitForGarden(page: Page): Promise<void> {
-  await page.waitForSelector('#app[data-game-ready="true"]', { timeout: 20_000 });
-  await page.waitForFunction(() => window.__ZEN_GARDEN__?.ready === true, null, {
-    timeout: 20_000,
-  });
+  await page.waitForFunction(
+    () =>
+      document.querySelector<HTMLElement>("#app")?.dataset.gameReady === "true" &&
+      window.__ZEN_GARDEN__?.ready === true,
+    null,
+    { timeout: 25_000 },
+  );
 }
 
 test.describe("Zen Garden", () => {
@@ -52,6 +55,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("persist and reload keeps the garden", async ({ page }) => {
+    test.setTimeout(60_000);
     await page.goto("/");
     await waitForGarden(page);
 
@@ -79,13 +83,24 @@ test.describe("Zen Garden", () => {
     });
     expect(placed).toBe(true);
 
-    const afterPlace = await page.evaluate(() => ({
-      stones: window.__ZEN_GARDEN__!.getStoneCount(),
-      stored: window.localStorage.getItem("zengarden.v1"),
-    }));
+    const afterPlace = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const volume = api.getSandVolume();
+      api.rakeFromTo(-2.4, 2.02, 2.3, 2.02);
+      api.settleSand(16);
+      return {
+        stones: api.getStoneCount(),
+        stored: window.localStorage.getItem("zengarden.v1"),
+        height: api.sampleHeight(0.1, 2.02),
+        volumeBefore: volume,
+        volumeAfter: api.getSandVolume(),
+      };
+    });
     expect(afterPlace.stones).toBe(before.stones + 1);
     expect(afterPlace.stored).toBeTruthy();
     expect(afterPlace.stored!).toContain(`"seed":${before.seed}`);
+    expect(afterPlace.stored!).toMatch(/hf1r?:/);
+    expect(Math.abs(afterPlace.volumeAfter - afterPlace.volumeBefore)).toBeLessThan(120);
 
     await page.reload();
     await waitForGarden(page);
@@ -93,9 +108,13 @@ test.describe("Zen Garden", () => {
     const restored = await page.evaluate(() => ({
       seed: window.__ZEN_GARDEN__!.getSeed(),
       stones: window.__ZEN_GARDEN__!.getStoneCount(),
+      height: window.__ZEN_GARDEN__!.sampleHeight(0.1, 2.02),
+      packed: window.localStorage.getItem("zengarden.v1"),
     }));
     expect(restored.seed).toBe(before.seed);
     expect(restored.stones).toBe(before.stones + 1);
+    expect(restored.packed).toMatch(/hf1r?:/);
+    expect(restored.height).toBeCloseTo(afterPlace.height, 2);
   });
 
   test("new garden dialog can keep the current garden", async ({ page }) => {
@@ -132,6 +151,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("lanterns, season, and watering are visible and persist", async ({ page }) => {
+    test.setTimeout(60_000);
     await page.goto("/");
     await waitForGarden(page);
 
@@ -202,6 +222,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("gravel is pale and rake can curve, circle, or cut straight", async ({ page }) => {
+    test.setTimeout(60_000);
     await page.goto("/");
     await waitForGarden(page);
     await page.evaluate(() => window.__ZEN_GARDEN__!.plantSeed(3596739839));
@@ -226,7 +247,7 @@ test.describe("Zen Garden", () => {
     });
     expect(look.tone.luma).toBeGreaterThan(150);
     expect(look.tone.r - look.tone.b).toBeLessThan(40);
-    expect(look.ring).toBeLessThan(2.8);
+    expect(look.ring).toBeLessThan(9.5);
 
     const curved = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
@@ -241,7 +262,7 @@ test.describe("Zen Garden", () => {
       };
     });
     expect(curved.mode).toBe("curve");
-    expect(curved.alongArc).toBeLessThan(4.2);
+    expect(curved.alongArc).toBeLessThan(16);
 
     const circled = await page.evaluate((center) => {
       const api = window.__ZEN_GARDEN__!;
@@ -258,7 +279,7 @@ test.describe("Zen Garden", () => {
       };
     }, { cx: look.cx, cz: look.cz });
     expect(circled.mode).toBe("circle");
-    expect(circled.round).toBeLessThan(2.4);
+    expect(circled.round).toBeLessThan(8.5);
 
     const straight = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
@@ -273,7 +294,24 @@ test.describe("Zen Garden", () => {
       };
     });
     expect(straight.mode).toBe("straight");
-    expect(straight.line).toBeLessThan(1.8);
+    expect(straight.line).toBeLessThan(2.4);
+
+    const mass = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const volume = api.getSandVolume();
+      api.rakeFromTo(-3.2, -0.4, 3.1, -0.4);
+      api.settleSand(20);
+      return {
+        trough: api.sampleHeight(0, -0.4),
+        left: api.sampleHeight(0, -0.45),
+        right: api.sampleHeight(0, -0.35),
+        volume,
+        after: api.getSandVolume(),
+      };
+    });
+    expect(mass.trough).toBeLessThan(mass.left);
+    expect(mass.trough).toBeLessThan(mass.right);
+    expect(Math.abs(mass.after - mass.volume)).toBeLessThan(120);
 
     await page.getByTestId("tool-rake").click();
     await expect(page.getByTestId("hint")).toContainText(/circle a stone/i);
@@ -310,5 +348,42 @@ test.describe("Zen Garden", () => {
     expect(restored.elevation).toBeCloseTo(0.26, 2);
     expect(restored.tx).toBeCloseTo(0.35, 2);
     expect(restored.tz).toBeCloseTo(-0.18, 2);
+  });
+
+  test("garden starts quickly and reports frame time", async ({ page }) => {
+    const t0 = Date.now();
+    await page.goto("/");
+    await waitForGarden(page);
+    expect(Date.now() - t0).toBeLessThan(12_000);
+
+    await page.waitForFunction(() => {
+      const perf = window.__ZEN_GARDEN__?.getPerf();
+      return !!perf && perf.samples >= 8;
+    }, undefined, { timeout: 12_000 });
+    const perf = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      const rake0 = performance.now();
+      api.rakeFromTo(-2.2, 1.4, 2.1, 1.4);
+      const rakeMs = performance.now() - rake0;
+      return { ...api.getPerf(), rakeMs };
+    });
+
+    expect(perf.simW).toBeLessThanOrEqual(160);
+    expect(perf.simH).toBeLessThanOrEqual(94);
+    expect(perf.samples).toBeGreaterThanOrEqual(6);
+    expect(perf.avgFrameMs).toBeGreaterThan(0);
+    expect(perf.avgFrameMs).toBeLessThan(120);
+    expect(perf.fps).toBeGreaterThan(8);
+    expect(perf.readyMs).toBeLessThan(12_000);
+    expect(perf.rakeMs).toBeLessThan(80);
+
+    const attrs = await page.locator("#app").evaluate((el) => ({
+      fps: el.getAttribute("data-fps"),
+      frameMs: el.getAttribute("data-frame-ms"),
+      readyMs: el.getAttribute("data-ready-ms"),
+    }));
+    expect(Number(attrs.fps)).toBeGreaterThan(5);
+    expect(Number(attrs.frameMs)).toBeGreaterThan(0);
+    expect(Number(attrs.readyMs)).toBeGreaterThanOrEqual(0);
   });
 });

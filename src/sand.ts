@@ -1,508 +1,719 @@
 import * as THREE from "three";
-import { GARDEN, type Blocker, type SandTone } from "./types";
+import { chooseDisplayGrid, chooseSimGrid } from "./device";
+import { createGravelAtlas } from "./gravelAtlas";
+import { applyGravelShader } from "./gravelShader";
 import { mulberry32 } from "./rng";
+import { GARDEN, type Blocker, type SandTone } from "./types";
 
-const TEX_W = 2048;
-const TEX_H = 1280;
-/** Keep groove-sample APIs in the original 1024-wide pixel space. */
-const SAMPLE_SCALE = TEX_W / 1024;
-const PX_PER_WORLD_X = TEX_W / GARDEN.width;
+/** Packed height+rake-direction payload for localStorage. */
+export const HEIGHT_PREFIX = "hf1:";
+export const HEIGHT_RLE_PREFIX = "hf1r:";
 
+const H_MIN = -0.086;
+const H_MAX = 0.086;
+const H_RANGE = H_MAX - H_MIN;
+const REPOSE = Math.tan((30 * Math.PI) / 180);
+const TINES = 5;
+const TINE_GAP = 0.114;
+const TROUGH_SIGMA = 0.036;
+const RIDGE_OFF = 0.056;
+const RIDGE_SIGMA = 0.03;
+const RAKE_DEPTH = 0.042;
+/** Legacy sample space so groove APIs stay in the old 1024-wide units. */
+const SAMPLE_SCALE = 2;
+const LEGACY_W = 1024;
+
+export interface Occupant {
+  x: number;
+  z: number;
+  r: number;
+  pile?: number;
+  sink?: number;
+}
+
+interface Rect {
+  i0: number;
+  j0: number;
+  i1: number;
+  j1: number;
+}
+
+/**
+ * Volumetric gravel court: a CPU height field with conservation rake,
+ * angle-of-repose slump, and a GPU-displaced mesh shaded as pale pebbles.
+ */
 export class SandField {
   readonly mesh: THREE.Mesh;
-  readonly texture: THREE.CanvasTexture;
-  readonly heightTexture: THREE.CanvasTexture;
-  readonly grainTexture: THREE.CanvasTexture;
-  readonly canvas: HTMLCanvasElement;
-  private readonly heightCanvas: HTMLCanvasElement;
-  private readonly ctx: CanvasRenderingContext2D;
-  private readonly heightCtx: CanvasRenderingContext2D;
-  private dirty = false;
+  readonly texture: THREE.DataTexture;
+  readonly simW: number;
+  readonly simH: number;
+  readonly height: Float32Array;
+  readonly dirX: Float32Array;
+  readonly dirZ: Float32Array;
+
+  private readonly field: Uint8Array<ArrayBuffer>;
+  private readonly dispW: number;
+  private readonly dispH: number;
+  private readonly scratch: Float32Array;
+  private dirty: Rect | null = null;
+  private slumpRect: Rect | null = null;
+  private slumpLeft = 0;
+  private slumpRow = 0;
+  private packNeeded = false;
+  private occupantsDirty = false;
+  private readonly cellX: number;
+  private readonly cellZ: number;
+  private readonly cellMin: number;
 
   constructor() {
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = TEX_W;
-    this.canvas.height = TEX_H;
-    const ctx = this.canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) throw new Error("Could not create sand canvas");
-    this.ctx = ctx;
+    const sim = chooseSimGrid();
+    this.simW = sim.w;
+    this.simH = sim.h;
+    const n = sim.w * sim.h;
+    this.height = new Float32Array(n);
+    this.dirX = new Float32Array(n);
+    this.dirZ = new Float32Array(n);
+    this.scratch = new Float32Array(n);
+    const display = chooseDisplayGrid(sim);
+    this.dispW = display.w;
+    this.dispH = display.h;
+    this.field = new Uint8Array(new ArrayBuffer(display.w * display.h * 4));
+    this.cellX = GARDEN.width / (sim.w - 1);
+    this.cellZ = GARDEN.depth / (sim.h - 1);
+    this.cellMin = Math.min(this.cellX, this.cellZ);
 
-    this.heightCanvas = document.createElement("canvas");
-    this.heightCanvas.width = TEX_W;
-    this.heightCanvas.height = TEX_H;
-    const heightCtx = this.heightCanvas.getContext("2d", { willReadFrequently: true });
-    if (!heightCtx) throw new Error("Could not create sand height canvas");
-    this.heightCtx = heightCtx;
-
-    this.paintBase(0x9e3779b9);
-    this.texture = new THREE.CanvasTexture(this.canvas);
-    this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.anisotropy = 16;
+    this.texture = new THREE.DataTexture(this.field, display.w, display.h, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.texture.colorSpace = THREE.NoColorSpace;
     this.texture.wrapS = THREE.ClampToEdgeWrapping;
     this.texture.wrapT = THREE.ClampToEdgeWrapping;
-    this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
+    this.texture.minFilter = THREE.LinearFilter;
     this.texture.generateMipmaps = false;
+    this.texture.needsUpdate = true;
+    this.texture.flipY = true;
 
-    this.heightTexture = new THREE.CanvasTexture(this.heightCanvas);
-    this.heightTexture.colorSpace = THREE.NoColorSpace;
-    this.heightTexture.anisotropy = 16;
-    this.heightTexture.wrapS = THREE.ClampToEdgeWrapping;
-    this.heightTexture.wrapT = THREE.ClampToEdgeWrapping;
-    this.heightTexture.minFilter = THREE.LinearFilter;
-    this.heightTexture.magFilter = THREE.LinearFilter;
-    this.heightTexture.generateMipmaps = false;
-
-    this.grainTexture = makeGrainTile();
-
-    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, 220, 128);
+    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
-    const grainTex = this.grainTexture;
+
+    const atlas = createGravelAtlas();
     const mat = new THREE.MeshStandardMaterial({
-      map: this.texture,
-      bumpMap: this.heightTexture,
-      bumpScale: 1.7,
-      displacementMap: this.heightTexture,
-      displacementScale: 0.052,
-      displacementBias: -0.02,
-      roughness: 0.88,
+      color: 0xffffff,
+      map: atlas,
+      bumpMap: atlas,
+      bumpScale: 0.22,
+      roughness: 0.84,
       metalness: 0,
-      color: 0xf7f4ed,
+      displacementMap: this.texture,
+      displacementScale: H_RANGE,
+      displacementBias: H_MIN,
+      envMapIntensity: 0,
     });
-    mat.onBeforeCompile = (shader) => {
-      shader.uniforms.uGrain = { value: grainTex };
-      shader.fragmentShader = `uniform sampler2D uGrain;\n${shader.fragmentShader}`.replace(
-        "#include <map_fragment>",
-        `#include <map_fragment>
-         vec2 gUv = vMapUv * vec2(26.0, 16.0);
-         vec3 grain = texture2D(uGrain, gUv).rgb;
-         diffuseColor.rgb *= mix(vec3(1.0), grain, 0.48);
-        `,
-      );
-    };
-    mat.customProgramCacheKey = () => "sand-grain-tile";
+    applyGravelShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE);
+
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = false;
     this.mesh.userData.kind = "sand";
+
+    this.markAllDirty();
   }
 
   paintBase(seed: number): void {
-    const { ctx, canvas } = this;
     const rng = mulberry32(seed);
-    const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    g.addColorStop(0, "#eceae4");
-    g.addColorStop(0.48, "#f5f2eb");
-    g.addColorStop(1, "#e4e1d8");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    this.scatterGrains(ctx, rng, false);
-    this.paintHeightBase(seed);
-    this.markDirty();
+    const n = this.height.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i / this.simW) | 0;
+      const x = i % this.simW;
+      const und =
+        (rng() - 0.5) * 0.007 +
+        0.0024 * Math.sin(x * 0.17 + seed) +
+        0.0018 * Math.cos(j * 0.21 + seed * 0.4);
+      this.height[i] = und;
+      this.dirX[i] = 0;
+      this.dirZ[i] = 0;
+    }
+    this.markAllDirty();
+    this.queueSlump(3);
   }
 
   worldToUv(x: number, z: number): { u: number; v: number } {
     return {
-      u: (x / GARDEN.width + 0.5) * TEX_W,
-      v: (z / GARDEN.depth + 0.5) * TEX_H,
+      u: (x / GARDEN.width + 0.5) * LEGACY_W,
+      v: (z / GARDEN.depth + 0.5) * (LEGACY_W * (GARDEN.depth / GARDEN.width)),
     };
   }
 
-  rake(fromX: number, fromZ: number, toX: number, toZ: number, blockers: Blocker[]): void {
-    const a = this.worldToUv(fromX, fromZ);
-    const b = this.worldToUv(toX, toZ);
-    const dx = b.u - a.u;
-    const dy = b.v - a.v;
-    const len = Math.hypot(dx, dy);
-    if (len < 1.2 * SAMPLE_SCALE) return;
-    if (!this.clearOfBlockers(fromX, fromZ, blockers) || !this.clearOfBlockers(toX, toZ, blockers)) {
-      return;
-    }
-
-    const nx = -dy / len;
-    const ny = dx / len;
-    const tines = 7;
-    const spacing = 0.057 * PX_PER_WORLD_X;
-    this.strokeTines(a.u, a.v, b.u, b.v, nx, ny, tines, spacing);
-    this.markDirty();
+  sampleHeight(x: number, z: number): number {
+    const u = x / GARDEN.width + 0.5;
+    const v = z / GARDEN.depth + 0.5;
+    return this.sampleBilinear(u * (this.simW - 1), v * (this.simH - 1));
   }
 
-  rakeArc(
-    cx: number,
-    cz: number,
-    radius: number,
-    a0: number,
-    a1: number,
-    blockers: Blocker[],
-  ): void {
+  getSandVolume(): number {
+    let sum = 0;
+    for (let i = 0; i < this.height.length; i++) sum += this.height[i];
+    return sum;
+  }
+
+  getSandTone(): SandTone {
+    let acc = 0;
+    let n = 0;
+    const step = Math.max(3, (this.simW / 48) | 0);
+    for (let j = 2; j < this.simH - 2; j += step) {
+      for (let i = 2; i < this.simW - 2; i += step) {
+        const h = this.height[j * this.simW + i];
+        const shade = 0.74 + ((h - H_MIN) / H_RANGE) * 0.28;
+        acc += shade;
+        n += 1;
+      }
+    }
+    const k = acc / Math.max(1, n);
+    const r = 236 * k;
+    const g = 230 * k;
+    const b = 218 * k;
+    return { r, g, b, luma: r * 0.3 + g * 0.59 + b * 0.11 };
+  }
+
+  rake(fromX: number, fromZ: number, toX: number, toZ: number, blockers: Blocker[]): void {
+    if (!this.clearOfBlockers(fromX, fromZ, blockers) && !this.clearOfBlockers(toX, toZ, blockers)) {
+      return;
+    }
+    this.carveSegment(fromX, fromZ, toX, toZ, blockers, RAKE_DEPTH, true);
+    this.queueSlump(4);
+  }
+
+  rakeArc(cx: number, cz: number, radius: number, a0: number, a1: number, blockers: Blocker[]): void {
     const sweep = a1 - a0;
     if (Math.abs(sweep) < 0.008 || radius < 0.12) return;
-    const steps = Math.max(3, Math.ceil(radius * Math.abs(sweep) * 18));
-    const tines = 7;
-    const spacing = 0.055;
-    for (let t = 0; t < tines; t++) {
-      const center = (tines - 1) / 2;
-      const r = radius + (t - center) * spacing;
-      if (r < 0.1) continue;
-      const depth = 1 - Math.abs(t - center) / (center + 0.01);
-      this.strokeWorldGrooveArc(cx, cz, r, a0, a1, steps, blockers, depth);
-    }
-    this.markDirty();
+    this.carveArc(cx, cz, radius, a0, a1, blockers, RAKE_DEPTH, false);
+    this.queueSlump(4);
   }
 
   paintRing(wx: number, wz: number, radiusWorld: number, innerWorld = 0.42, tineGap = 0.165): void {
     for (let r = innerWorld + tineGap; r < radiusWorld; r += tineGap) {
-      this.strokeWorldGrooveCircle(wx, wz, r, 0.82);
+      this.carveArc(wx, wz, r, 0, Math.PI * 2, [], RAKE_DEPTH * 0.92, true);
     }
-    this.markDirty();
+    this.queueSlump(4);
   }
 
   paintParallel(seed: number): void {
     const rng = mulberry32(seed ^ 0x51ed);
-    const gap = (11 + Math.floor(rng() * 3)) * SAMPLE_SCALE;
-    const inset = 18 * SAMPLE_SCALE;
-    for (let y = inset; y < TEX_H - inset; y += gap) {
-      this.strokePixelGroove(inset, y, TEX_W - inset, y, 0.7);
-    }
-    this.markDirty();
-  }
-
-  getSandTone(): SandTone {
-    this.flush();
-    const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    const step = 32;
-    let n = 0;
-    for (let y = 8; y < TEX_H; y += step) {
-      for (let x = 8; x < TEX_W; x += step) {
-        const i = (y * TEX_W + x) * 4;
-        r += img.data[i];
-        g += img.data[i + 1];
-        b += img.data[i + 2];
-        n += 1;
+    const gap = 0.17 + rng() * 0.03;
+    const inset = 0.28;
+    const z0 = -GARDEN.depth / 2 + inset;
+    const z1 = GARDEN.depth / 2 - inset;
+    const x0 = -GARDEN.width / 2 + inset;
+    const x1 = GARDEN.width / 2 - inset;
+    const i0 = this.clampI(this.worldToI(x0));
+    const i1 = this.clampI(this.worldToI(x1));
+    const j0 = this.clampJ(this.worldToJ(z0 - 0.22));
+    const j1 = this.clampJ(this.worldToJ(z1 + 0.22));
+    const depth = RAKE_DEPTH * 0.78;
+    const grooves: number[] = [];
+    for (let z = z0; z <= z1; z += gap) grooves.push(z);
+    for (let j = j0; j <= j1; j++) {
+      const z = this.jToWorld(j);
+      let delta = 0;
+      for (const gz of grooves) delta += singleTine(z - gz) * depth;
+      if (Math.abs(delta) < 1e-5) continue;
+      for (let i = i0; i <= i1; i++) {
+        const idx = j * this.simW + i;
+        const wobble = 1 + 0.07 * Math.sin(i * 0.37 + z * 4.1);
+        this.height[idx] += delta * wobble;
+        this.dirX[idx] = 1;
+        this.dirZ[idx] = 0;
       }
     }
-    r /= n;
-    g /= n;
-    b /= n;
-    return { r, g, b, luma: r * 0.3 + g * 0.59 + b * 0.11 };
+    this.expandDirty(i0, j0, i1, j1);
+    this.queueSlump(4);
+  }
+
+  embedOccupants(items: Occupant[]): void {
+    for (const it of items) {
+      this.bankObject(it.x, it.z, it.r, it.pile ?? 0.02, it.sink ?? 0.022);
+    }
+    this.occupantsDirty = true;
+    this.queueSlump(4);
+  }
+
+  bankObject(x: number, z: number, radius: number, pile: number, sink: number): void {
+    const pad = radius * 1.85;
+    const i0 = this.clampI(this.worldToI(x - pad));
+    const i1 = this.clampI(this.worldToI(x + pad));
+    const j0 = this.clampJ(this.worldToJ(z - pad));
+    const j1 = this.clampJ(this.worldToJ(z + pad));
+    let removed = 0;
+    let depositW = 0;
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const wx = this.iToWorld(i);
+        const wz = this.jToWorld(j);
+        const d = Math.hypot(wx - x, wz - z);
+        const idx = j * this.simW + i;
+        if (d < radius * 0.72) {
+          const w = 1 - d / (radius * 0.72);
+          const take = sink * w * w;
+          this.height[idx] -= take;
+          removed += take;
+        } else if (d < radius * 1.7) {
+          const t = (d - radius * 0.78) / (radius * 0.92);
+          const w = Math.exp(-0.5 * ((t - 0.35) / 0.28) ** 2);
+          this.scratch[idx] = w;
+          depositW += w;
+        } else {
+          this.scratch[idx] = 0;
+        }
+      }
+    }
+    if (depositW > 1e-6) {
+      const gain = (removed * (pile > 0 ? 1 : 0) || removed) / depositW;
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const idx = j * this.simW + i;
+          const w = this.scratch[idx];
+          if (w > 0) this.height[idx] += gain * w;
+          this.scratch[idx] = 0;
+        }
+      }
+    }
+    this.expandDirty(i0, j0, i1, j1);
+  }
+
+  settle(steps = 8): void {
+    const rect = this.slumpRect ?? this.dirty ?? this.fullRect();
+    this.slumpRegion(rect, steps);
+    this.clampRect(rect);
+    this.packTexture();
+    this.slumpLeft = 0;
+    this.occupantsDirty = true;
+  }
+
+  queueSlump(steps = 6): void {
+    this.slumpLeft = Math.max(this.slumpLeft, steps);
+    this.slumpRect = this.dirty ? copyRect(this.dirty) : this.slumpRect;
+    this.slumpRow = this.slumpRect?.j0 ?? 1;
+  }
+
+  stepSlump(_dt: number): void {
+    if (this.slumpLeft <= 0) return;
+    const rect = this.slumpRect ?? this.dirty;
+    if (!rect) {
+      this.slumpLeft = 0;
+      return;
+    }
+    const cells = (rect.i1 - rect.i0 + 1) * (rect.j1 - rect.j0 + 1);
+    if (cells <= 720) {
+      this.slumpRegion(rect, 1);
+      this.clampRect(rect);
+      this.slumpLeft -= 1;
+    } else {
+      const bandH = 8;
+      const j0 = this.slumpRow;
+      const j1 = Math.min(rect.j1, j0 + bandH - 1);
+      this.slumpRegion({ i0: rect.i0, j0, i1: rect.i1, j1 }, 1);
+      this.clampRect({ i0: rect.i0, j0, i1: rect.i1, j1 });
+      this.slumpRow = j1 + 1;
+      if (this.slumpRow > rect.j1) {
+        this.slumpRow = rect.j0;
+        this.slumpLeft -= 1;
+      }
+    }
+    this.packNeeded = true;
+    if (this.slumpLeft <= 0) this.occupantsDirty = true;
+  }
+
+  consumeOccupantSettle(): boolean {
+    if (!this.occupantsDirty) return false;
+    this.occupantsDirty = false;
+    return true;
   }
 
   sampleGrooveDeviation(fromX: number, fromZ: number, toX: number, toZ: number): number {
-    this.flush();
-    const a = this.worldToUv(fromX, fromZ);
-    const b = this.worldToUv(toX, toZ);
-    const dx = b.u - a.u;
-    const dy = b.v - a.v;
-    const len = Math.hypot(dx, dy);
-    if (len < 8 * SAMPLE_SCALE) return 0;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
+    const dx = toX - fromX;
+    const dz = toZ - fromZ;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.2) return 0;
+    const nx = -dz / len;
+    const nz = dx / len;
     const offsets: number[] = [];
-    const steps = Math.max(8, Math.floor(len / (5 * SAMPLE_SCALE)));
+    const steps = 28;
     let prev = 0;
-    const win0 = 12 * SAMPLE_SCALE;
-    const win = 3 * SAMPLE_SCALE;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const cx = a.u + dx * t;
-      const cy = a.v + dy * t;
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const cx = fromX + dx * t;
+      const cz = fromZ + dz * t;
       let best = prev;
-      let bestDark = 999;
-      const lo = i === 0 ? -win0 : prev - win;
-      const hi = i === 0 ? win0 : prev + win;
-      for (let o = lo; o <= hi; o += 1) {
-        const x = Math.round(cx + nx * o);
-        const y = Math.round(cy + ny * o);
-        if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
-        const luma = sampleLuma(img.data, x, y);
-        if (luma < bestDark) {
-          bestDark = luma;
+      let bestH = 99;
+      const win = s === 0 ? 0.14 : 0.08;
+      for (let o = prev - win; o <= prev + win; o += 0.012) {
+        const h = this.sampleHeight(cx + nx * o, cz + nz * o);
+        if (h < bestH) {
+          bestH = h;
           best = o;
         }
       }
       prev = best;
-      offsets.push(best / SAMPLE_SCALE);
+      offsets.push(best * (LEGACY_W / GARDEN.width) / SAMPLE_SCALE);
     }
-    const mean = offsets.reduce((s, v) => s + v, 0) / offsets.length;
-    const variance = offsets.reduce((s, v) => s + (v - mean) ** 2, 0) / offsets.length;
-    return Math.sqrt(variance);
+    return stddev(offsets);
   }
 
   sampleArcDeviation(cx: number, cz: number, radius: number, a0 = 0, a1 = Math.PI * 2): number {
-    this.flush();
-    const img = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
     const steps = 36;
     const radii: number[] = [];
     let prev = 0;
-    const win0 = 8 * SAMPLE_SCALE;
-    const win = 3 * SAMPLE_SCALE;
     for (let i = 0; i <= steps; i++) {
       const a = a0 + ((a1 - a0) * i) / steps;
       const px = cx + Math.cos(a) * radius;
       const pz = cz + Math.sin(a) * radius;
-      const uv = this.worldToUv(px, pz);
-      const inward = this.worldToUv(cx + Math.cos(a) * (radius - 0.2), cz + Math.sin(a) * (radius - 0.2));
-      const nx = uv.u - inward.u;
-      const ny = uv.v - inward.v;
-      const nlen = Math.hypot(nx, ny) || 1;
+      const nx = Math.cos(a);
+      const nz = Math.sin(a);
       let best = prev;
-      let bestDark = 999;
-      const lo = i === 0 ? -win0 : prev - win;
-      const hi = i === 0 ? win0 : prev + win;
-      for (let o = lo; o <= hi; o += 1) {
-        const x = Math.round(uv.u + (nx / nlen) * o);
-        const y = Math.round(uv.v + (ny / nlen) * o);
-        if (x < 0 || y < 0 || x >= TEX_W || y >= TEX_H) continue;
-        const luma = sampleLuma(img.data, x, y);
-        if (luma < bestDark) {
-          bestDark = luma;
+      let bestH = 99;
+      const win = i === 0 ? 0.12 : 0.08;
+      for (let o = prev - win; o <= prev + win; o += 0.01) {
+        const h = this.sampleHeight(px + nx * o, pz + nz * o);
+        if (h < bestH) {
+          bestH = h;
           best = o;
         }
       }
       prev = best;
-      radii.push(best / SAMPLE_SCALE);
+      radii.push(best * (LEGACY_W / GARDEN.width) / SAMPLE_SCALE);
     }
-    const mean = radii.reduce((s, v) => s + v, 0) / radii.length;
-    const variance = radii.reduce((s, v) => s + (v - mean) ** 2, 0) / radii.length;
-    return Math.sqrt(variance);
+    return stddev(radii);
   }
 
   exportDataUrl(): string {
-    this.flush();
-    return this.canvas.toDataURL("image/jpeg", 0.68);
+    this.packTexture();
+    const raw = new Uint8Array(this.simW * this.simH);
+    for (let i = 0; i < raw.length; i++) {
+      const t = (this.height[i] - H_MIN) / H_RANGE;
+      raw[i] = t <= 0 ? 0 : t >= 1 ? 255 : (t * 255 + 0.5) | 0;
+    }
+    const rle = rleEncode(raw);
+    const useRle = rle.length < raw.length * 0.86;
+    const bytes = useRle ? rle : raw;
+    const b64 = bytesToBase64(bytes);
+    const prefix = useRle ? HEIGHT_RLE_PREFIX : HEIGHT_PREFIX;
+    return `${prefix}${this.simW},${this.simH},${b64}`;
   }
 
   async importDataUrl(dataUrl: string): Promise<void> {
-    if (!dataUrl) return;
-    const img = new Image();
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("sand image"));
-      img.src = dataUrl;
-    });
-    this.ctx.drawImage(img, 0, 0, TEX_W, TEX_H);
-    this.rebuildHeightFromColor();
-    this.markDirty();
-    this.flush();
+    if (!dataUrl) throw new Error("sand image");
+    if (dataUrl.startsWith(HEIGHT_PREFIX) || dataUrl.startsWith(HEIGHT_RLE_PREFIX)) {
+      if (!this.importPacked(dataUrl)) throw new Error("sand image");
+      return;
+    }
+    throw new Error("sand image");
   }
 
   flush(): void {
-    if (!this.dirty) return;
-    this.texture.needsUpdate = true;
-    this.heightTexture.needsUpdate = true;
-    this.dirty = false;
+    if (!this.packNeeded) return;
+    this.packTexture();
+    this.packNeeded = false;
   }
 
-  private paintHeightBase(seed: number): void {
-    const ctx = this.heightCtx;
-    ctx.fillStyle = "#8e8e8e";
-    ctx.fillRect(0, 0, TEX_W, TEX_H);
-    this.scatterGrains(ctx, mulberry32(seed ^ 0x51edc07), true);
-  }
-
-  private scatterGrains(ctx: CanvasRenderingContext2D, rng: () => number, height: boolean): void {
-    const img = ctx.getImageData(0, 0, TEX_W, TEX_H);
-    const data = img.data;
-    const fine = 210000;
-    for (let i = 0; i < fine; i++) {
-      const x = (rng() * TEX_W) | 0;
-      const y = (rng() * TEX_H) | 0;
-      const idx = (y * TEX_W + x) * 4;
-      if (height) {
-        const d = rng() > 0.5 ? 28 + rng() * 36 : -(22 + rng() * 34);
-        data[idx] = clampByte(data[idx] + d);
-        data[idx + 1] = data[idx];
-        data[idx + 2] = data[idx];
-      } else {
-        const cool = rng() > 0.48;
-        const a = 0.12 + rng() * 0.22;
-        const src = cool ? [78, 76, 72] : [255, 253, 247];
-        data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
-        data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
-        data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
+  private importPacked(payload: string): boolean {
+    const rle = payload.startsWith(HEIGHT_RLE_PREFIX);
+    const body = payload.slice(rle ? HEIGHT_RLE_PREFIX.length : HEIGHT_PREFIX.length);
+    const comma1 = body.indexOf(",");
+    const comma2 = body.indexOf(",", comma1 + 1);
+    if (comma1 < 0 || comma2 < 0) return false;
+    const w = Number(body.slice(0, comma1));
+    const h = Number(body.slice(comma1 + 1, comma2));
+    if (!w || !h || w > 512 || h > 512) return false;
+    let bytes: Uint8Array;
+    try {
+      bytes = base64ToBytes(body.slice(comma2 + 1));
+    } catch {
+      return false;
+    }
+    if (rle) bytes = rleDecode(bytes, w * h);
+    if (bytes.length < w * h) return false;
+    for (let j = 0; j < this.simH; j++) {
+      for (let i = 0; i < this.simW; i++) {
+        const u = (i / (this.simW - 1)) * (w - 1);
+        const v = (j / (this.simH - 1)) * (h - 1);
+        const x0 = Math.min(w - 1, Math.floor(u));
+        const y0 = Math.min(h - 1, Math.floor(v));
+        const x1 = Math.min(w - 1, x0 + 1);
+        const y1 = Math.min(h - 1, y0 + 1);
+        const fx = u - x0;
+        const fy = v - y0;
+        const h00 = bytes[y0 * w + x0];
+        const h10 = bytes[y0 * w + x1];
+        const h01 = bytes[y1 * w + x0];
+        const h11 = bytes[y1 * w + x1];
+        const lo = h00 * (1 - fx) + h10 * fx;
+        const hi = h01 * (1 - fx) + h11 * fx;
+        const packed = lo * (1 - fy) + hi * fy;
+        this.height[j * this.simW + i] = H_MIN + (packed / 255) * H_RANGE;
       }
     }
-    const pebbles = 14000;
-    for (let i = 0; i < pebbles; i++) {
-      const x = (rng() * TEX_W) | 0;
-      const y = (rng() * TEX_H) | 0;
-      const w = 1 + ((rng() * 3) | 0);
-      const h = 1 + ((rng() * 2) | 0);
-      const light = rng() > 0.52;
-      for (let yy = 0; yy < h; yy++) {
-        for (let xx = 0; xx < w; xx++) {
-          const px = x + xx;
-          const py = y + yy;
-          if (px < 0 || py < 0 || px >= TEX_W || py >= TEX_H) continue;
-          const idx = (py * TEX_W + px) * 4;
-          if (height) {
-            const d = light ? 28 : -32;
-            data[idx] = clampByte(data[idx] + d);
-            data[idx + 1] = data[idx];
-            data[idx + 2] = data[idx];
-          } else {
-            const a = 0.16 + rng() * 0.22;
-            const src = light ? [250, 248, 242] : [92, 90, 84];
-            data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
-            data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
-            data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
+    this.inferDirections();
+    this.markAllDirty();
+    this.packTexture();
+    return true;
+  }
+
+  private inferDirections(): void {
+    for (let j = 1; j < this.simH - 1; j++) {
+      for (let i = 1; i < this.simW - 1; i++) {
+        const idx = j * this.simW + i;
+        const dx = this.height[idx + 1] - this.height[idx - 1];
+        const dz = this.height[idx + this.simW] - this.height[idx - this.simW];
+        const len = Math.hypot(dx, dz);
+        if (len < 0.002) {
+          this.dirX[idx] = 0;
+          this.dirZ[idx] = 0;
+        } else {
+          this.dirX[idx] = -dz / len;
+          this.dirZ[idx] = dx / len;
+        }
+      }
+    }
+  }
+
+  private carveSegment(
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    blockers: Blocker[],
+    depth: number,
+    includeEnd: boolean,
+  ): void {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.012) return;
+    const tx = dx / len;
+    const tz = dz / len;
+    const nx = -tz;
+    const nz = tx;
+    const pad = TINES * TINE_GAP * 0.5 + RIDGE_OFF + this.cellMin * 3;
+    const i0 = this.clampI(this.worldToI(Math.min(ax, bx) - pad));
+    const i1 = this.clampI(this.worldToI(Math.max(ax, bx) + pad));
+    const j0 = this.clampJ(this.worldToJ(Math.min(az, bz) - pad));
+    const j1 = this.clampJ(this.worldToJ(Math.max(az, bz) + pad));
+    const end = includeEnd ? len : len - 1e-6;
+
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const x = this.iToWorld(i);
+        const z = this.jToWorld(j);
+        if (!this.clearOfBlockers(x, z, blockers)) continue;
+        const t = (x - ax) * tx + (z - az) * tz;
+        if (t < 0 || t > end) continue;
+        const px = ax + tx * t;
+        const pz = az + tz * t;
+        const across = (x - px) * nx + (z - pz) * nz;
+        const delta = tineProfile(across) * depth;
+        if (Math.abs(delta) < 1e-5) continue;
+        const idx = j * this.simW + i;
+        this.height[idx] += delta;
+        this.dirX[idx] = this.dirX[idx] * 0.35 + tx * 0.65;
+        this.dirZ[idx] = this.dirZ[idx] * 0.35 + tz * 0.65;
+      }
+    }
+    this.expandDirty(i0, j0, i1, j1);
+  }
+
+  private carveArc(
+    cx: number,
+    cz: number,
+    radius: number,
+    a0: number,
+    a1: number,
+    blockers: Blocker[],
+    depth: number,
+    single = false,
+  ): void {
+    let sweep = a1 - a0;
+    while (sweep > Math.PI * 2) sweep -= Math.PI * 2;
+    while (sweep < -Math.PI * 2) sweep += Math.PI * 2;
+    if (Math.abs(sweep) < 0.008) return;
+    const pad = TINES * TINE_GAP * 0.5 + RIDGE_OFF + this.cellMin * 3;
+    const reach = radius + pad;
+    const i0 = this.clampI(this.worldToI(cx - reach));
+    const i1 = this.clampI(this.worldToI(cx + reach));
+    const j0 = this.clampJ(this.worldToJ(cz - reach));
+    const j1 = this.clampJ(this.worldToJ(cz + reach));
+
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const x = this.iToWorld(i);
+        const z = this.jToWorld(j);
+        if (!this.clearOfBlockers(x, z, blockers)) continue;
+        const dx = x - cx;
+        const dz = z - cz;
+        const dist = Math.hypot(dx, dz);
+        const across = dist - radius;
+        if (Math.abs(across) > pad) continue;
+        let ang = Math.atan2(dz, dx);
+        if (!angleInSweep(ang, a0, sweep)) continue;
+        const delta = (single ? singleTine(across) : tineProfile(across)) * depth;
+        if (Math.abs(delta) < 1e-5) continue;
+        const idx = j * this.simW + i;
+        this.height[idx] += delta;
+        const tx = -dz / (dist || 1);
+        const tz = dx / (dist || 1);
+        this.dirX[idx] = this.dirX[idx] * 0.35 + tx * 0.65;
+        this.dirZ[idx] = this.dirZ[idx] * 0.35 + tz * 0.65;
+      }
+    }
+    this.expandDirty(i0, j0, i1, j1);
+  }
+
+  private slumpRegion(rect: Rect, iterations: number): void {
+    const maxDh = REPOSE * this.cellMin;
+    const w = this.simW;
+    const h = this.height;
+    const i0 = Math.max(1, rect.i0);
+    const i1 = Math.min(this.simW - 2, rect.i1);
+    const j0 = Math.max(1, rect.j0);
+    const j1 = Math.min(this.simH - 2, rect.j1);
+    const neigh = [1, -1, w, -w];
+
+    for (let it = 0; it < iterations; it++) {
+      const jStart = it % 2 === 0 ? j0 : j1;
+      const jEnd = it % 2 === 0 ? j1 : j0;
+      const jStep = it % 2 === 0 ? 1 : -1;
+      const iStart = it % 2 === 0 ? i0 : i1;
+      const iEnd = it % 2 === 0 ? i1 : i0;
+      const iStep = it % 2 === 0 ? 1 : -1;
+      for (let j = jStart; j !== jEnd + jStep; j += jStep) {
+        for (let i = iStart; i !== iEnd + iStep; i += iStep) {
+          const idx = j * w + i;
+          let steep = 0;
+          let dest = idx;
+          for (const off of neigh) {
+            const dh = h[idx] - h[idx + off];
+            if (dh > steep) {
+              steep = dh;
+              dest = idx + off;
+            }
+          }
+          if (steep > maxDh) {
+            const move = (steep - maxDh) * 0.32;
+            h[idx] -= move;
+            h[dest] += move;
           }
         }
       }
     }
-    ctx.putImageData(img, 0, 0);
+    this.expandDirty(i0, j0, i1, j1);
   }
 
-  private rebuildHeightFromColor(): void {
-    const color = this.ctx.getImageData(0, 0, TEX_W, TEX_H);
-    const height = this.heightCtx.createImageData(TEX_W, TEX_H);
-    for (let i = 0; i < color.data.length; i += 4) {
-      const luma = color.data[i] * 0.3 + color.data[i + 1] * 0.59 + color.data[i + 2] * 0.11;
-      const h = clampByte(48 + (luma / 255) * 168);
-      height.data[i] = h;
-      height.data[i + 1] = h;
-      height.data[i + 2] = h;
-      height.data[i + 3] = 255;
-    }
-    this.heightCtx.putImageData(height, 0, 0);
-  }
-
-  private strokeTines(
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number,
-    nx: number,
-    ny: number,
-    tines: number,
-    spacing: number,
-  ): void {
-    const center = (tines - 1) / 2;
-    for (let t = 0; t < tines; t++) {
-      const off = (t - center) * spacing;
-      const depth = 1 - Math.abs(t - center) / (center + 0.01);
-      this.strokePixelGroove(ax + nx * off, ay + ny * off, bx + nx * off, by + ny * off, depth);
-    }
-  }
-
-  private strokePixelGroove(ax: number, ay: number, bx: number, by: number, depth: number): void {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const ridge = 1.7 * SAMPLE_SCALE;
-
-    this.strokeOn(this.ctx, ax, ay, bx, by, `rgba(72, 70, 64, ${0.2 + depth * 0.22})`, (1.25 + depth * 1.25) * SAMPLE_SCALE);
-    this.strokeOn(
-      this.ctx,
-      ax + nx * 1.45 * SAMPLE_SCALE,
-      ay + ny * 1.45 * SAMPLE_SCALE,
-      bx + nx * 1.45 * SAMPLE_SCALE,
-      by + ny * 1.45 * SAMPLE_SCALE,
-      `rgba(250, 248, 242, ${0.12 + depth * 0.16})`,
-      0.95 * SAMPLE_SCALE,
-    );
-
-    this.heightCtx.filter = "blur(0.7px)";
-    this.strokeOn(this.heightCtx, ax, ay, bx, by, `rgba(42, 42, 42, ${0.42 + depth * 0.38})`, 3.1 * SAMPLE_SCALE + depth * 1.4 * SAMPLE_SCALE);
-    this.strokeOn(
-      this.heightCtx,
-      ax + nx * ridge,
-      ay + ny * ridge,
-      bx + nx * ridge,
-      by + ny * ridge,
-      `rgba(214, 214, 214, ${0.28 + depth * 0.28})`,
-      1.7 * SAMPLE_SCALE,
-    );
-    this.heightCtx.filter = "none";
-  }
-
-  private strokeWorldGrooveCircle(wx: number, wz: number, radius: number, depth: number): void {
-    this.strokeWorldGrooveArc(wx, wz, radius, 0, Math.PI * 2, Math.max(40, Math.ceil(radius * 42)), [], depth);
-  }
-
-  private strokeWorldGrooveArc(
-    cx: number,
-    cz: number,
-    radius: number,
-    a0: number,
-    a1: number,
-    steps: number,
-    blockers: Blocker[],
-    depth: number,
-  ): void {
-    this.traceWorldArc(this.ctx, cx, cz, radius, a0, a1, steps, blockers, `rgba(66, 64, 58, ${0.22 + depth * 0.24})`, (1.35 + depth * 1.35) * SAMPLE_SCALE);
-    this.traceWorldArc(this.ctx, cx, cz, radius + 0.018, a0, a1, steps, blockers, `rgba(252, 250, 244, ${0.11 + depth * 0.14})`, 0.95 * SAMPLE_SCALE);
-    this.heightCtx.filter = "blur(0.7px)";
-    this.traceWorldArc(this.heightCtx, cx, cz, radius, a0, a1, steps, blockers, `rgba(40, 40, 40, ${0.44 + depth * 0.36})`, 3.2 * SAMPLE_SCALE + depth * 1.35 * SAMPLE_SCALE);
-    this.traceWorldArc(this.heightCtx, cx, cz, radius + 0.02, a0, a1, steps, blockers, `rgba(216, 216, 216, ${0.28 + depth * 0.26})`, 1.7 * SAMPLE_SCALE);
-    this.heightCtx.filter = "none";
-  }
-
-  private strokeOn(
-    ctx: CanvasRenderingContext2D,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number,
-    color: string,
-    width: number,
-  ): void {
-    ctx.lineCap = "butt";
-    ctx.lineJoin = "miter";
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.stroke();
-  }
-
-  private traceWorldArc(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    cz: number,
-    radius: number,
-    a0: number,
-    a1: number,
-    steps: number,
-    blockers: Blocker[],
-    color: string,
-    width: number,
-  ): void {
-    ctx.lineCap = "butt";
-    ctx.lineJoin = "miter";
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    let drawing = false;
-    for (let i = 0; i <= steps; i++) {
-      const a = a0 + ((a1 - a0) * i) / steps;
-      const x = cx + Math.cos(a) * radius;
-      const z = cz + Math.sin(a) * radius;
-      if (!this.clearOfBlockers(x, z, blockers)) {
-        drawing = false;
-        continue;
-      }
-      const uv = this.worldToUv(x, z);
-      if (!drawing) {
-        ctx.beginPath();
-        ctx.moveTo(uv.u, uv.v);
-        drawing = true;
-      } else {
-        ctx.lineTo(uv.u, uv.v);
+  private clampRect(rect: Rect): void {
+    const i0 = Math.max(0, rect.i0);
+    const i1 = Math.min(this.simW - 1, rect.i1);
+    const j0 = Math.max(0, rect.j0);
+    const j1 = Math.min(this.simH - 1, rect.j1);
+    for (let j = j0; j <= j1; j++) {
+      const row = j * this.simW;
+      for (let i = i0; i <= i1; i++) {
+        const v = this.height[row + i];
+        this.height[row + i] = v < H_MIN ? H_MIN : v > H_MAX ? H_MAX : v;
       }
     }
-    if (drawing) ctx.stroke();
   }
 
-  private markDirty(): void {
-    this.dirty = true;
+  private packTexture(): void {
+    const { field, dispW, dispH, simW, simH } = this;
+    const lastI = simW - 1;
+    const lastJ = simH - 1;
+    for (let j = 0; j < dispH; j++) {
+      for (let i = 0; i < dispW; i++) {
+        const fi = (i / Math.max(1, dispW - 1)) * lastI;
+        const fj = (j / Math.max(1, dispH - 1)) * lastJ;
+        let h = this.sampleBilinear(fi, fj);
+        const ix = this.clampI(Math.floor(fi));
+        const jz = this.clampJ(Math.floor(fj));
+        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.0084 - 0.0042;
+        h += grain;
+        const dx = this.sampleDirX(ix, jz);
+        const dz = this.sampleDirZ(ix, jz);
+        const o = (j * dispW + i) * 4;
+        const t = (h - H_MIN) / H_RANGE;
+        field[o] = t <= 0 ? 0 : t >= 1 ? 255 : (t * 255 + 0.5) | 0;
+        field[o + 1] = ((dx * 0.5 + 0.5) * 255 + 0.5) | 0;
+        field[o + 2] = ((dz * 0.5 + 0.5) * 255 + 0.5) | 0;
+        field[o + 3] = 255;
+      }
+    }
+    this.texture.needsUpdate = true;
+  }
+
+  private sampleDirX(i: number, j: number): number {
+    return this.dirX[j * this.simW + i];
+  }
+
+  private sampleDirZ(i: number, j: number): number {
+    return this.dirZ[j * this.simW + i];
+  }
+
+  private sampleBilinear(fi: number, fj: number): number {
+    const x0 = this.clampI(Math.floor(fi));
+    const y0 = this.clampJ(Math.floor(fj));
+    const x1 = this.clampI(x0 + 1);
+    const y1 = this.clampJ(y0 + 1);
+    const fx = fi - Math.floor(fi);
+    const fy = fj - Math.floor(fj);
+    const h00 = this.height[y0 * this.simW + x0];
+    const h10 = this.height[y0 * this.simW + x1];
+    const h01 = this.height[y1 * this.simW + x0];
+    const h11 = this.height[y1 * this.simW + y1 * 0 + x1];
+    return (h00 * (1 - fx) + h10 * fx) * (1 - fy) + (h01 * (1 - fx) + h11 * fx) * fy;
+  }
+
+  private worldToI(x: number): number {
+    return ((x / GARDEN.width + 0.5) * (this.simW - 1) + 0.5) | 0;
+  }
+
+  private worldToJ(z: number): number {
+    return ((z / GARDEN.depth + 0.5) * (this.simH - 1) + 0.5) | 0;
+  }
+
+  private iToWorld(i: number): number {
+    return (i / (this.simW - 1) - 0.5) * GARDEN.width;
+  }
+
+  private jToWorld(j: number): number {
+    return (j / (this.simH - 1) - 0.5) * GARDEN.depth;
+  }
+
+  private clampI(i: number): number {
+    return i < 0 ? 0 : i > this.simW - 1 ? this.simW - 1 : i;
+  }
+
+  private clampJ(j: number): number {
+    return j < 0 ? 0 : j > this.simH - 1 ? this.simH - 1 : j;
+  }
+
+  private fullRect(): Rect {
+    return { i0: 1, j0: 1, i1: this.simW - 2, j1: this.simH - 2 };
+  }
+
+  private markAllDirty(): void {
+    this.dirty = this.fullRect();
+    this.slumpRect = copyRect(this.dirty);
+    this.packNeeded = true;
+  }
+
+  private expandDirty(i0: number, j0: number, i1: number, j1: number): void {
+    if (!this.dirty) {
+      this.dirty = { i0, j0, i1, j1 };
+    } else {
+      this.dirty.i0 = Math.min(this.dirty.i0, i0);
+      this.dirty.j0 = Math.min(this.dirty.j0, j0);
+      this.dirty.i1 = Math.max(this.dirty.i1, i1);
+      this.dirty.j1 = Math.max(this.dirty.j1, j1);
+    }
+    this.slumpRect = this.slumpRect ? unionRect(this.slumpRect, this.dirty) : copyRect(this.dirty);
+    this.packNeeded = true;
   }
 
   private clearOfBlockers(x: number, z: number, blockers: Blocker[]): boolean {
@@ -513,76 +724,112 @@ export class SandField {
   }
 }
 
-function makeGrainTile(): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("grain tile");
-  ctx.fillStyle = "#f2efe8";
-  ctx.fillRect(0, 0, size, size);
-  const rng = mulberry32(0xc0ffee);
-  const img = ctx.getImageData(0, 0, size, size);
-  const data = img.data;
-  for (let i = 0; i < 14000; i++) {
-    const x = (rng() * size) | 0;
-    const y = (rng() * size) | 0;
-    const idx = (y * size + x) * 4;
-    const light = rng() > 0.5;
-    const a = 0.22 + rng() * 0.4;
-    const src = light ? [255, 253, 246] : [70, 68, 64];
-    data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
-    data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
-    data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
-  }
-  for (let i = 0; i < 900; i++) {
-    const x = (rng() * size) | 0;
-    const y = (rng() * size) | 0;
-    const w = 1 + ((rng() * 3) | 0);
-    const h = 1 + ((rng() * 2) | 0);
-    const light = rng() > 0.5;
-    const src = light ? [252, 250, 244] : [82, 80, 74];
-    for (let yy = 0; yy < h; yy++) {
-      for (let xx = 0; xx < w; xx++) {
-        const px = (x + xx) % size;
-        const py = (y + yy) % size;
-        const idx = (py * size + px) * 4;
-        const a = 0.28 + rng() * 0.35;
-        data[idx] = Math.round(data[idx] * (1 - a) + src[0] * a);
-        data[idx + 1] = Math.round(data[idx + 1] * (1 - a) + src[1] * a);
-        data[idx + 2] = Math.round(data[idx + 2] * (1 - a) + src[2] * a);
-      }
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.generateMipmaps = false;
-  tex.anisotropy = 16;
-  return tex;
+function hash2(x: number, y: number): number {
+  let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
 
-function clampByte(v: number): number {
-  return Math.max(0, Math.min(255, v | 0));
+function singleTine(across: number): number {
+  const trough = Math.exp(-0.5 * (across / TROUGH_SIGMA) ** 2);
+  const ridge =
+    Math.exp(-0.5 * ((across - RIDGE_OFF) / RIDGE_SIGMA) ** 2) +
+    Math.exp(-0.5 * ((across + RIDGE_OFF) / RIDGE_SIGMA) ** 2);
+  return -trough + (TROUGH_SIGMA / (2 * RIDGE_SIGMA)) * ridge;
 }
 
-function sampleLuma(data: Uint8ClampedArray, x: number, y: number): number {
-  let sum = 0;
-  let n = 0;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const px = x + dx;
-      const py = y + dy;
-      if (px < 0 || py < 0 || px >= TEX_W || py >= TEX_H) continue;
-      const idx = (py * TEX_W + px) * 4;
-      sum += data[idx] * 0.3 + data[idx + 1] * 0.59 + data[idx + 2] * 0.11;
-      n += 1;
+function tineProfile(across: number): number {
+  let trough = 0;
+  let ridge = 0;
+  const center = (TINES - 1) / 2;
+  for (let t = 0; t < TINES; t++) {
+    const off = (t - center) * TINE_GAP;
+    const d = across - off;
+    trough += Math.exp(-0.5 * (d / TROUGH_SIGMA) ** 2);
+    ridge += Math.exp(-0.5 * ((d - RIDGE_OFF) / RIDGE_SIGMA) ** 2);
+    ridge += Math.exp(-0.5 * ((d + RIDGE_OFF) / RIDGE_SIGMA) ** 2);
+  }
+  const a = 1;
+  const b = (a * TROUGH_SIGMA) / (2 * RIDGE_SIGMA);
+  return -a * trough + b * ridge;
+}
+
+function angleInSweep(ang: number, a0: number, sweep: number): boolean {
+  if (Math.abs(sweep) >= Math.PI * 2 - 1e-3) return true;
+  let d = ang - a0;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  if (sweep >= 0) return d >= -0.02 && d <= sweep + 0.02;
+  return d <= 0.02 && d >= sweep - 0.02;
+}
+
+function copyRect(r: Rect): Rect {
+  return { i0: r.i0, j0: r.j0, i1: r.i1, j1: r.j1 };
+}
+
+function unionRect(a: Rect, b: Rect): Rect {
+  return {
+    i0: Math.min(a.i0, b.i0),
+    j0: Math.min(a.j0, b.j0),
+    i1: Math.max(a.i1, b.i1),
+    j1: Math.max(a.j1, b.j1),
+  };
+}
+
+function stddev(values: number[]): number {
+  if (!values.length) return 0;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function rleEncode(src: Uint8Array): Uint8Array {
+  const out: number[] = [];
+  let i = 0;
+  while (i < src.length) {
+    const v = src[i];
+    let run = 1;
+    while (i + run < src.length && src[i + run] === v && run < 255) run += 1;
+    if (run >= 4 || v === 255) {
+      out.push(255, run, v);
+      i += run;
+    } else {
+      for (let k = 0; k < run; k++) out.push(src[i + k]);
+      i += run;
     }
   }
-  return n ? sum / n : 999;
+  return new Uint8Array(out);
+}
+
+function rleDecode(src: Uint8Array, expected: number): Uint8Array {
+  const out = new Uint8Array(expected);
+  let i = 0;
+  let o = 0;
+  while (i < src.length && o < expected) {
+    const v = src[i++];
+    if (v === 255 && i + 1 < src.length) {
+      const run = src[i++];
+      const val = src[i++];
+      for (let k = 0; k < run && o < expected; k++) out[o++] = val;
+    } else {
+      out[o++] = v;
+    }
+  }
+  return out;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunk = 0x8000;
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }

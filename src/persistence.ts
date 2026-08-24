@@ -7,6 +7,7 @@ export function loadSave(): GardenSave | null {
     const parsed = JSON.parse(raw) as GardenSave;
     if (!parsed || parsed.v !== 1 || typeof parsed.seed !== "number") return null;
     if (!Array.isArray(parsed.stones) || !parsed.bonsai || !parsed.basin) return null;
+    if (typeof parsed.sand !== "string") parsed.sand = "";
     return parsed;
   } catch {
     return null;
