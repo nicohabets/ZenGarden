@@ -12,6 +12,7 @@ import {
   createApron,
   createBackdrop,
   createBasin,
+  createCourtBed,
   createFrame,
   createGround,
   createLanterns,
@@ -118,6 +119,7 @@ export class ZenGarden {
     this.scene.add(createApron());
     this.scene.add(createFrame());
     this.scene.add(createBackdrop());
+    this.scene.add(createCourtBed());
     this.scene.add(this.sand.mesh);
     this.scene.add(this.grains.mesh);
     this.scene.add(this.stones.group);
@@ -515,8 +517,8 @@ export class ZenGarden {
         x: m.x,
         z: m.z,
         r: m.scale * 0.72,
-        rx: m.scale * 1.1,
-        rz: m.scale * 0.9,
+        rx: m.scale * 1.02,
+        rz: m.scale * 0.8,
         rotY: m.rotY,
       });
     }

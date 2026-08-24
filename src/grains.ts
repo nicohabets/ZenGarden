@@ -44,7 +44,7 @@ export class GrainCloud {
     const geo = makeGritGeometry();
     const mat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.88,
+      roughness: 0.72,
       metalness: 0,
       envMapIntensity: 0,
     });
@@ -84,9 +84,9 @@ export class GrainCloud {
     const carpetCap = Math.floor(this.maxCount * 0.86);
     const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.62)));
     const px = Math.max(1, viewH);
-    const targetPx = close ? 9 : cam.zoom < 2.2 ? 14 : 18;
+    const targetPx = close ? 14 : cam.zoom < 2.2 ? 16 : 20;
     const screenWorld = (targetPx * cam.zoom) / px;
-    const worldSize = Math.max(spacing * 1.85, screenWorld);
+    const worldSize = Math.max(spacing * 1.38, screenWorld);
 
     let n = 0;
     n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.62), 0, 0.18);
@@ -196,16 +196,37 @@ export class GrainCloud {
       const floor = h * SAND_HEIGHT_GAIN;
       const pile = h > 0.002 ? visualHeight(h) : 0;
       const y = GARDEN.sandY + floor + pile + worldSize * 0.42 + layer * LAYER_H;
-      const s = worldSize * (0.9 + seed * 0.14);
+      const s = worldSize * (0.82 + seed * 0.28);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
-      _dummy.scale.set(s * (0.88 + seed * 0.16), s * (0.78 + seed * 0.16), s * (0.86 + hash2(i, 9) * 0.16));
+      _dummy.scale.set(s * (0.86 + seed * 0.2), s * (0.74 + seed * 0.22), s * (0.84 + hash2(i, 9) * 0.2));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const trough = h < -0.004 ? -0.045 : 0;
-      const ridge = layer > 0 ? 0.04 : h > 0.008 ? 0.02 : 0;
-      const t = seed;
-      _color.setRGB(0.68 + t * 0.1 + ridge + trough, 0.64 + t * 0.08 + ridge * 0.7 + trough, 0.54 + t * 0.07 + ridge * 0.45 + trough);
+      const trough = h < -0.004 ? -0.05 : 0;
+      const ridge = layer > 0 ? 0.035 : h > 0.008 ? 0.018 : 0;
+      const bucket = (seed * 4) | 0;
+      let r = 0.68;
+      let g = 0.64;
+      let b = 0.54;
+      if (bucket === 0) {
+        r = 0.78;
+        g = 0.74;
+        b = 0.64;
+      } else if (bucket === 1) {
+        r = 0.7;
+        g = 0.66;
+        b = 0.54;
+      } else if (bucket === 2) {
+        r = 0.6;
+        g = 0.58;
+        b = 0.5;
+      } else {
+        r = 0.5;
+        g = 0.47;
+        b = 0.4;
+      }
+      const j = seed * 0.04;
+      _color.setRGB(r + j + ridge + trough, g + j * 0.8 + ridge * 0.7 + trough, b + j * 0.6 + ridge * 0.45 + trough);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
