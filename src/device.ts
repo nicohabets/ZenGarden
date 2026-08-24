@@ -41,28 +41,10 @@ export function chooseSimGrid(): { w: number; h: number } {
 
 /** Display mesh only — sim grid stays cheap for rake / slump. */
 export function chooseDisplayGrid(sim: { w: number; h: number }): { w: number; h: number } {
-  if (wantHighQuality()) return { w: 320, h: 188 };
+  if (wantHighQuality()) return { w: 448, h: 262 };
   if (isMobileGarden()) {
     return { w: Math.min(200, Math.round(sim.w * 1.5)), h: Math.min(118, Math.round(sim.h * 1.5)) };
   }
   return { w: Math.min(320, sim.w * 2), h: Math.min(188, sim.h * 2) };
 }
 
-/** Instanced grit budgets. Software GL stays sparse; close-up still gets a near field. */
-export function chooseGrainQuality(software: boolean): {
-  bedSpacing: number;
-  nearMinSpacing: number;
-  maxNear: number;
-  maxBed: number;
-} {
-  if (wantHighQuality()) {
-    return { bedSpacing: 0.022, nearMinSpacing: 0.0052, maxNear: 48000, maxBed: 82000 };
-  }
-  if (software) {
-    return { bedSpacing: 0.062, nearMinSpacing: 0.012, maxNear: 8000, maxBed: 18000 };
-  }
-  if (isMobileGarden()) {
-    return { bedSpacing: 0.048, nearMinSpacing: 0.008, maxNear: 14000, maxBed: 28000 };
-  }
-  return { bedSpacing: 0.034, nearMinSpacing: 0.0058, maxNear: 24000, maxBed: 52000 };
-}

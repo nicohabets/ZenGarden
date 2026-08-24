@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { chooseDisplayGrid, chooseSimGrid } from "./device";
-import { applySandBedShader } from "./gravelShader";
+import { applyPackedSandShader, type SandLookUniforms } from "./gravelShader";
 import { mulberry32 } from "./rng";
 import { GARDEN, type Blocker, type SandTone } from "./types";
 
@@ -39,7 +39,7 @@ interface Rect {
 
 /**
  * Court mass: a CPU height field with conservation rake and angle-of-repose
- * slump. Visible grit lives on GrainBed; this mesh is the pale bed under it.
+ * slump. Visible sand is packed millimetre grit (parallax) on this mesh.
  */
 export class SandField {
   readonly mesh: THREE.Mesh;
@@ -60,6 +60,7 @@ export class SandField {
   private slumpRow = 0;
   private packNeeded = false;
   private occupantsDirty = false;
+  private readonly look: SandLookUniforms;
   private readonly cellX: number;
   private readonly cellZ: number;
   private readonly cellMin: number;
@@ -103,16 +104,16 @@ export class SandField {
       roughness: 0.96,
       metalness: 0,
       displacementMap: this.texture,
-      displacementScale: H_RANGE * 0.1,
-      displacementBias: H_MIN * 0.1,
+      displacementScale: H_RANGE * 0.68,
+      displacementBias: H_MIN * 0.68,
       envMapIntensity: 0,
       emissive: 0x2a261e,
       emissiveIntensity: 0.08,
     });
-    applySandBedShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE);
+    this.look = applyPackedSandShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE * 0.68);
 
     this.mesh = new THREE.Mesh(geo, mat);
-    this.mesh.position.y = GARDEN.sandY - 0.012;
+    this.mesh.position.y = GARDEN.sandY;
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = false;
     this.mesh.userData.kind = "sand";
@@ -418,6 +419,14 @@ export class SandField {
     return true;
   }
 
+  setLook(zoom: number): void {
+    this.look.uZoom.value = zoom;
+  }
+
+  getGrainCount(): number {
+    return Math.floor(GARDEN.width * GARDEN.depth * 340 * 220);
+  }
+
   dirtyWorld(): { x0: number; z0: number; x1: number; z1: number } | "all" | null {
     if (!this.dirty) return null;
     const full = this.dirty.i0 <= 2 && this.dirty.j0 <= 2 && this.dirty.i1 >= this.simW - 3 && this.dirty.j1 >= this.simH - 3;
@@ -651,7 +660,7 @@ export class SandField {
         let h = this.sampleBilinear(fi, fj);
         const ix = this.clampI(Math.floor(fi));
         const jz = this.clampJ(Math.floor(fj));
-        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.0084 - 0.0042;
+        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.02 - 0.01;
         h += grain;
         const dx = this.sampleDirX(ix, jz);
         const dz = this.sampleDirZ(ix, jz);

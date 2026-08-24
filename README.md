@@ -28,7 +28,7 @@ Tools:
 
 ## Persist
 
-World state is written to `localStorage` (`zengarden.v1`) whenever you rake, place, prune, water, move, or leave the page. Court mass is a compressed height field (`hf1` / `hf1r`); if the quota is tight the save slims the sand and keeps the rest. Grains are rebuilt from that field. Returning to the same browser restores the sand, stones, bonsai, and camera. Clearing site data starts a new garden. Nothing is sent to a server.
+World state is written to `localStorage` (`zengarden.v1`) whenever you rake, place, prune, water, move, or leave the page. Court mass is a compressed height field (`hf1` / `hf1r`); if the quota is tight the save slims the sand and keeps the rest. Packed grit is rebuilt from that field. Returning to the same browser restores the sand, stones, bonsai, and camera. Clearing site data starts a new garden. Nothing is sent to a server.
 
 ## Develop
 
@@ -95,4 +95,4 @@ npm run cf:preview
 
 ## Stack
 
-TypeScript, Vite, Three.js. No React, no auth, no server store. Court mass is a height field (160×94 desktop, 128×75 mobile): rake tines scoop grit, banks receive that mass, then sand slumps at a 30° repose. The visible court is instanced irregular grains (plus a pale grit bed). A denser near-field follows the camera so a 30cm view is thousands of shards, not a stamped atlas. Mobile uses a smaller grain budget and dirty updates. Stones sit in the sand. Moss islands are lumpy mounds. Shadows skip on phones; DPR is capped. Rake UX is unchanged — freehand curves, snap-to-circles, straight pulls. No audio.
+TypeScript, Vite, Three.js. No React, no auth, no server store. Court mass is a height field (160×94 desktop, 128×75 mobile): rake tines scoop grit, banks receive that mass, then sand slumps at a 30° repose. The visible court is packed millimetre grit (parallax relief on the displaced mesh), not an atlas and not 3D rock chips. Mobile uses fewer parallax steps. Stones sit in the sand. Moss islands are lumpy mounds. Shadows skip on phones; DPR is capped. Rake UX is unchanged — freehand curves, snap-to-circles, straight pulls. No audio.
