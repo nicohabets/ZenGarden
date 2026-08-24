@@ -79,31 +79,52 @@ export class GrainCloud {
     const spanZ = Math.max(0.1, z1 - z0);
     const cellBudget = Math.floor(this.maxCount * 0.34);
     const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
-    const worldSize = THREE.MathUtils.clamp(spacing * 2.15, 0.0014, 0.07);
+    const court = cam.zoom >= 1.25;
+    const worldSize = THREE.MathUtils.clamp(spacing * (court ? 2.4 : 2.15), 0.0014, court ? 0.078 : 0.07);
 
     let n = 0;
-    let row = 0;
-    for (let z = z0; z <= z1 && n < cellBudget; z += spacing, row++) {
-      const rowShift = (row % 2) * spacing * 0.5;
-      for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
-        const col = ((x - x0) / spacing) | 0;
-        const keep = hash2(row * 29 + 3, col * 17 + 8);
-        if (keep < 0.08) continue;
-        const hx = hash2(row * 19 + 3, col * 11 + 5);
-        const hz = hash2(row * 41 + 7, col * 23 + 2);
-        const gx = x + (hx - 0.5) * spacing * 1.9;
-        const gz = z + (hz - 0.5) * spacing * 1.9;
-        if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
-        if (blocked(gx, gz, blockers)) continue;
-        const h = sand.sampleVisual(gx, gz);
-        n = this.pushGrain(n, gx, gz, h, keep, 0);
-        if (h > -0.004 && keep > 0.55 && n < cellBudget) {
-          const ang = hash2(row + 13, col + 31) * Math.PI * 2;
-          const rad = spacing * (0.28 + keep * 0.4);
-          const sx = gx + Math.cos(ang) * rad;
-          const sz = gz + Math.sin(ang) * rad;
-          if (sx >= x0 && sx <= x1 && sz >= z0 && sz <= z1 && !blocked(sx, sz, blockers)) {
-            n = this.pushGrain(n, sx, sz, h, hash2(row + 7, col + 19), 0);
+    if (court) {
+      const clumps = Math.floor(cellBudget / 3);
+      for (let i = 0; i < clumps && n < cellBudget; i++) {
+        const cx = x0 + hash2(i, 17) * spanX;
+        const cz = z0 + hash2(i, 31) * spanZ;
+        if (blocked(cx, cz, blockers)) continue;
+        const h = sand.sampleVisual(cx, cz);
+        const members = 2 + ((hash2(i, 7) * 3) | 0);
+        for (let m = 0; m < members && n < cellBudget; m++) {
+          const ang = hash2(i + m * 3, 11) * Math.PI * 2;
+          const rad = spacing * (0.2 + hash2(i, m + 4) * 1.1);
+          const gx = cx + Math.cos(ang) * rad;
+          const gz = cz + Math.sin(ang) * rad;
+          if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
+          if (blocked(gx, gz, blockers)) continue;
+          n = this.pushGrain(n, gx, gz, h, hash2(i + m, 19), 0);
+        }
+      }
+    } else {
+      let row = 0;
+      for (let z = z0; z <= z1 && n < cellBudget; z += spacing, row++) {
+        const rowShift = (row % 2) * spacing * 0.5;
+        for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
+          const col = ((x - x0) / spacing) | 0;
+          const keep = hash2(row * 29 + 3, col * 17 + 8);
+          if (keep < 0.08) continue;
+          const hx = hash2(row * 19 + 3, col * 11 + 5);
+          const hz = hash2(row * 41 + 7, col * 23 + 2);
+          const gx = x + (hx - 0.5) * spacing * 1.9;
+          const gz = z + (hz - 0.5) * spacing * 1.9;
+          if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
+          if (blocked(gx, gz, blockers)) continue;
+          const h = sand.sampleVisual(gx, gz);
+          n = this.pushGrain(n, gx, gz, h, keep, 0);
+          if (h > -0.004 && keep > 0.55 && n < cellBudget) {
+            const ang = hash2(row + 13, col + 31) * Math.PI * 2;
+            const rad = spacing * (0.28 + keep * 0.4);
+            const sx = gx + Math.cos(ang) * rad;
+            const sz = gz + Math.sin(ang) * rad;
+            if (sx >= x0 && sx <= x1 && sz >= z0 && sz <= z1 && !blocked(sx, sz, blockers)) {
+              n = this.pushGrain(n, sx, sz, h, hash2(row + 7, col + 19), 0);
+            }
           }
         }
       }
