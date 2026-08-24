@@ -11,13 +11,13 @@ export const HEIGHT_RLE_PREFIX = "hf1r:";
 const H_MIN = -0.086;
 const H_MAX = 0.086;
 const H_RANGE = H_MAX - H_MIN;
-const REPOSE = Math.tan((28 * Math.PI) / 180);
+const REPOSE = Math.tan((30 * Math.PI) / 180);
 const TINES = 5;
-const TINE_GAP = 0.118;
-const TROUGH_SIGMA = 0.042;
-const RIDGE_OFF = 0.06;
-const RIDGE_SIGMA = 0.036;
-const RAKE_DEPTH = 0.04;
+const TINE_GAP = 0.114;
+const TROUGH_SIGMA = 0.036;
+const RIDGE_OFF = 0.056;
+const RIDGE_SIGMA = 0.03;
+const RAKE_DEPTH = 0.042;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
@@ -590,7 +590,7 @@ export class SandField {
             }
           }
           if (steep > maxDh) {
-            const move = (steep - maxDh) * 0.4;
+            const move = (steep - maxDh) * 0.32;
             h[idx] -= move;
             h[dest] += move;
           }

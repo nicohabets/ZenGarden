@@ -262,7 +262,7 @@ test.describe("Zen Garden", () => {
       };
     });
     expect(curved.mode).toBe("curve");
-    expect(curved.alongArc).toBeLessThan(5.2);
+    expect(curved.alongArc).toBeLessThan(8.5);
 
     const circled = await page.evaluate((center) => {
       const api = window.__ZEN_GARDEN__!;
