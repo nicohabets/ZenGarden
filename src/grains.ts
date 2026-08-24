@@ -16,7 +16,7 @@ const _color = new THREE.Color();
 
 /** Bank growth in metres so piles stay readable at every zoom. */
 const LAYER_H = 0.0068;
-const SLUMP = 0.0072;
+const SLUMP = 0.012;
 
 /**
  * Packed millimetre grit. A rake scoops a valley and stacks that mass on
@@ -87,7 +87,7 @@ export class GrainCloud {
     const spanZ = Math.max(0.1, z1 - z0);
     const cellBudget = Math.floor(this.maxCount * 0.4);
     const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
-    const worldSize = THREE.MathUtils.clamp(spacing * 1.55, 0.0014, 0.034);
+    const worldSize = THREE.MathUtils.clamp(spacing * 1.85, 0.0014, 0.052);
 
     let n = 0;
     let row = 0;
@@ -104,7 +104,7 @@ export class GrainCloud {
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
         const h = sand.sampleVisual(gx, gz);
-        if (h < -0.02 && keep < 0.35) continue;
+        if (h < -0.028 && keep < 0.22) continue;
         n = this.pushGrain(n, gx, gz, h, keep, 0);
         if (h > -0.004 && keep > 0.55 && n < cellBudget) {
           const ang = hash2(row + 13, col + 31) * Math.PI * 2;
@@ -171,7 +171,7 @@ export class GrainCloud {
     const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.4))));
     const n = this.count;
     for (let i = 0; i < n; i++) this.hs[i] = sand.sampleVisual(this.xs[i], this.zs[i]);
-    this.writeInstances(THREE.MathUtils.clamp(spacing * 1.55, 0.0014, 0.034));
+    this.writeInstances(THREE.MathUtils.clamp(spacing * 1.85, 0.0014, 0.052));
   }
 
   private writeInstances(worldSize: number): void {

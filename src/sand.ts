@@ -136,7 +136,7 @@ export class SandField {
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
-    this.mesh.receiveShadow = true;
+    this.mesh.receiveShadow = false;
     this.mesh.castShadow = false;
     this.mesh.userData.kind = "sand";
 

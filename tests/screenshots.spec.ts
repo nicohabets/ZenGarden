@@ -41,7 +41,7 @@ test.describe("screenshots", () => {
         azimuth: 1.52,
         elevation: 0.182,
         zoom: 0.38,
-        tx: 3.35,
+        tx: 1.15,
         tz: 1.88,
       });
     });

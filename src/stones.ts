@@ -163,7 +163,7 @@ function sharedMoss(): {
     metalness: 0,
     flatShading: false,
   });
-  mossGeo ??= new THREE.IcosahedronGeometry(0.16, 2);
+  mossGeo ??= new THREE.SphereGeometry(0.16, 18, 14);
   mossGeo.userData.shared = true;
   collarGeo ??= new THREE.SphereGeometry(0.42, 18, 12);
   collarGeo.userData.shared = true;
