@@ -84,9 +84,9 @@ export class GrainCloud {
     const carpetCap = Math.floor(this.maxCount * 0.86);
     const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.62)));
     const px = Math.max(1, viewH);
-    const targetPx = close ? 14 : cam.zoom < 2.2 ? 16 : 20;
+    const targetPx = close ? 22 : cam.zoom < 2.2 ? 16 : 20;
     const screenWorld = (targetPx * cam.zoom) / px;
-    const worldSize = Math.max(spacing * (close ? 1.62 : 1.4), screenWorld);
+    const worldSize = Math.max(spacing * (close ? 1.78 : 1.4), close ? Math.max(screenWorld, 0.024) : screenWorld);
 
     let n = 0;
     n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.62), 0, 0.18);
@@ -201,7 +201,7 @@ export class GrainCloud {
       const s = worldSize * (0.82 + seed * 0.28);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
-      _dummy.scale.set(s * (0.86 + seed * 0.2), s * (0.74 + seed * 0.22), s * (0.84 + hash2(i, 9) * 0.2));
+      _dummy.scale.set(s * (0.86 + seed * 0.2), s * (0.92 + seed * 0.16), s * (0.84 + hash2(i, 9) * 0.2));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
       const trough = h < -0.004 ? -0.05 : 0;
@@ -239,7 +239,7 @@ export class GrainCloud {
 /** Expand leftover rake relief so a scooped bank still reads after slump. */
 function visualHeight(h: number): number {
   const t = THREE.MathUtils.clamp(h / 0.055, 0, 1);
-  return Math.pow(t, 0.6) * 0.014;
+  return Math.pow(t, 0.6) * 0.018;
 }
 
 /** Solid angular pebble — tetrahedrons left holes that showed the slab. */
