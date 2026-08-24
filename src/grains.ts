@@ -15,8 +15,8 @@ const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
 
 /** Bank growth in metres so piles stay readable at every zoom. */
-const LAYER_H = 0.0068;
-const SLUMP = 0.012;
+const LAYER_H = 0.0032;
+const SLUMP = 0.008;
 
 /**
  * Packed millimetre grit. A rake scoops a valley and stacks that mass on
@@ -77,11 +77,11 @@ export class GrainCloud {
     const z1 = Math.min(GARDEN.depth / 2 - 0.03, bounds.z1);
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
-    const cellBudget = Math.floor(this.maxCount * 0.34);
-    const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
+    const cellBudget = Math.floor(this.maxCount * (wantHighQuality() ? 0.7 : 0.52));
+    const spacing = Math.max(0.0011, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
     const court = cam.zoom >= 1.25;
     const hq = wantHighQuality();
-    const worldSize = THREE.MathUtils.clamp(spacing * (court ? 2.4 : 2.15), 0.0014, court ? 0.078 : 0.07);
+    const worldSize = THREE.MathUtils.clamp(spacing * 1.12, 0.0011, hq ? 0.014 : 0.022);
 
     let n = 0;
     if (court) {
@@ -109,11 +109,11 @@ export class GrainCloud {
         for (let x = x0 + rowShift; x <= x1 && n < cellBudget; x += spacing) {
           const col = ((x - x0) / spacing) | 0;
           const keep = hash2(row * 29 + 3, col * 17 + 8);
-          if (keep < 0.08) continue;
+          if (keep < 0.04) continue;
           const hx = hash2(row * 19 + 3, col * 11 + 5);
           const hz = hash2(row * 41 + 7, col * 23 + 2);
-          const gx = x + (hx - 0.5) * spacing * 1.9;
-          const gz = z + (hz - 0.5) * spacing * 1.9;
+          const gx = x + (hx - 0.5) * spacing * 0.62;
+          const gz = z + (hz - 0.5) * spacing * 0.62;
           if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
           if (blocked(gx, gz, blockers)) continue;
           const h = hq ? sand.sampleVisual(gx, gz) : sand.sampleHeight(gx, gz);
@@ -137,8 +137,8 @@ export class GrainCloud {
       const h = this.hs[i];
       if (h < 0.003) continue;
       const stacks = hq
-        ? h > 0.02 ? 18 : h > 0.012 ? 13 : h > 0.007 ? 9 : 5
-        : h > 0.02 ? 10 : h > 0.012 ? 7 : h > 0.007 ? 5 : 3;
+        ? h > 0.02 ? 10 : h > 0.012 ? 7 : h > 0.007 ? 5 : 3
+        : h > 0.02 ? 6 : h > 0.012 ? 4 : 2;
       const dir = sand.sampleDir(this.xs[i], this.zs[i]);
       let px = -dir.z;
       let pz = dir.x;
@@ -165,21 +165,37 @@ export class GrainCloud {
       }
     }
 
-    const bankStep = hq ? Math.max(0.02, spacing * 1.2) : Math.max(0.038, spacing * 1.8);
-    const bankLayers = hq ? 7 : 4;
-    sand.forEachBank(x0, z0, x1, z1, bankStep, (x, z, tx, tz, h) => {
+    const pathStep = hq ? Math.max(0.012, spacing * 0.95) : Math.max(0.028, spacing * 1.6);
+    sand.forEachTrough(x0, z0, x1, z1, pathStep, (x, z, _tx, _tz, h) => {
+      if (n >= this.maxCount) return;
+      if (blocked(x, z, blockers)) return;
+      const seed = hash2((x * 67) | 0, (z * 83) | 0);
+      n = this.pushGrain(n, x + (seed - 0.5) * spacing * 0.4, z + (hash2((z * 83) | 0, 4) - 0.5) * spacing * 0.4, h, seed, 0);
+      if (hq) {
+        n = this.pushGrain(
+          n,
+          x + (hash2((x * 17) | 0, 9) - 0.5) * spacing * 0.35,
+          z + (hash2(8, (z * 19) | 0) - 0.5) * spacing * 0.35,
+          h,
+          hash2((x * 13) | 0, 21),
+          0,
+        );
+      }
+    });
+    const bankLayers = hq ? 6 : 3;
+    sand.forEachBank(x0, z0, x1, z1, pathStep, (x, z, tx, tz, h) => {
       if (n >= this.maxCount) return;
       if (blocked(x, z, blockers)) return;
       const seed = hash2((x * 73) | 0, (z * 91) | 0);
-      n = this.pushGrain(n, x + (seed - 0.5) * 0.012, z + (hash2((z * 91) | 0, 5) - 0.5) * 0.012, h, seed, 0);
+      n = this.pushGrain(n, x + (seed - 0.5) * spacing * 0.35, z + (hash2((z * 91) | 0, 5) - 0.5) * spacing * 0.35, h, seed, 0);
       const nx = -tz;
       const nz = tx;
       for (let layer = 1; layer <= bankLayers && n < this.maxCount; layer++) {
         const s = hash2(((x * 41) | 0) + layer, ((z * 37) | 0) + 11);
         n = this.pushGrain(
           n,
-          x + nx * layer * SLUMP * 0.5 + (s - 0.5) * 0.014,
-          z + nz * layer * SLUMP * 0.5 + (hash2(layer + 3, 19) - 0.5) * 0.014,
+          x + nx * layer * SLUMP * 0.45 + (s - 0.5) * spacing * 0.3,
+          z + nz * layer * SLUMP * 0.45 + (hash2(layer + 3, 19) - 0.5) * spacing * 0.3,
           h,
           s,
           layer,
@@ -213,14 +229,14 @@ export class GrainCloud {
         Math.max(h * SAND_HEIGHT_GAIN, visualHeight(h)) +
         worldSize * 0.38 +
         layer * LAYER_H;
-      const s = worldSize * (0.8 + seed * 0.28);
+      const s = worldSize * (0.86 + seed * 0.22);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
-      _dummy.rotation.set(seed * 4.2, seed * 6.1, hash2(i + 3, 17) * 5.4);
-      _dummy.scale.set(s * (0.9 + seed * 0.16), s * (0.74 + seed * 0.16), s * (0.88 + hash2(i, 9) * 0.16));
+      _dummy.rotation.set(seed * 5.1, seed * 7.3, hash2(i + 3, 17) * 6.2);
+      _dummy.scale.set(s * (0.82 + seed * 0.28), s * (0.42 + seed * 0.22), s * (0.7 + hash2(i, 9) * 0.3));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const lift = THREE.MathUtils.clamp(layer * 0.008, 0, 0.07);
-      _color.setRGB(0.87 + seed * 0.05 + lift, 0.83 + seed * 0.04 + lift * 0.65, 0.75 + seed * 0.03 + lift * 0.35);
+      const lift = THREE.MathUtils.clamp(layer * 0.01, 0, 0.05);
+      _color.setRGB(0.82 + seed * 0.07 + lift, 0.78 + seed * 0.05 + lift * 0.6, 0.7 + seed * 0.04 + lift * 0.35);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -236,17 +252,15 @@ function visualHeight(h: number): number {
 }
 
 function makeGritGeometry(): THREE.BufferGeometry {
-  const segs = isMobileGarden() && !wantHighQuality() ? 5 : 6;
-  const rings = isMobileGarden() && !wantHighQuality() ? 4 : 5;
-  const geo = new THREE.SphereGeometry(0.5, segs, rings);
-  geo.scale(1.0, 0.78, 0.9);
+  const geo = new THREE.IcosahedronGeometry(0.5, 0);
+  geo.scale(1.15, 0.34, 0.82);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
-    const k = hash2((x * 31) | 0, (z * 19) | 0);
-    pos.setXYZ(i, x * (0.9 + k * 0.14), y * (0.88 + k * 0.16), z * (0.88 + (1 - k) * 0.14));
+    const k = hash2((x * 47) | 0, (z * 29) | 0);
+    pos.setXYZ(i, x * (0.78 + k * 0.28), y * (0.7 + k * 0.35), z * (0.74 + (1 - k) * 0.3));
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();
@@ -285,7 +299,7 @@ function blocked(x: number, z: number, blockers: Blocker[]): boolean {
   for (const b of blockers) {
     const dx = x - b.x;
     const dz = z - b.z;
-    if (dx * dx + dz * dz < b.r * b.r * 1.15) return true;
+    if (dx * dx + dz * dz < b.r * b.r * 1.28) return true;
   }
   return false;
 }

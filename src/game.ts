@@ -510,7 +510,7 @@ export class ZenGarden {
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });
     for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.32 + s.scale * 0.18 });
-    for (const m of this.mossStates) list.push({ x: m.x, z: m.z, r: m.scale * 0.46 });
+    for (const m of this.mossStates) list.push({ x: m.x, z: m.z, r: m.scale * 0.78 });
     return list;
   }
 

@@ -115,20 +115,17 @@ export class SandField {
     const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
     geo.rotateX(-Math.PI / 2);
 
-    const pale = new THREE.DataTexture(new Uint8Array([224, 216, 204, 255]), 1, 1);
+    const pale = new THREE.DataTexture(new Uint8Array([214, 206, 194, 255]), 1, 1);
     pale.colorSpace = THREE.SRGBColorSpace;
     pale.needsUpdate = true;
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshLambertMaterial({
       color: 0xffffff,
       map: pale,
-      roughness: 1,
-      metalness: 0,
       displacementMap: this.texture,
       displacementScale: SAND_DISP_SCALE,
       displacementBias: SAND_DISP_BIAS,
-      envMapIntensity: 0,
-      emissive: 0xcac2b6,
-      emissiveIntensity: 0.18,
+      emissive: 0xc8c0b4,
+      emissiveIntensity: 0.35,
     });
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = 1.5;
@@ -203,6 +200,63 @@ export class SandField {
       const m = this.marks[i];
       const offs = ridgeOffsets(m.multi);
       const h = m.depth * 0.62;
+      if (m.kind === "seg") {
+        const dx = m.bx - m.ax;
+        const dz = m.bz - m.az;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.04) continue;
+        const tx = dx / len;
+        const tz = dz / len;
+        const nx = -tz;
+        const nz = tx;
+        for (let t = 0; t <= len; t += ds) {
+          const px = m.ax + tx * t;
+          const pz = m.az + tz * t;
+          for (let k = 0; k < offs.length; k++) {
+            const x = px + nx * offs[k];
+            const z = pz + nz * offs[k];
+            if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+            fn(x, z, tx, tz, h);
+          }
+        }
+        continue;
+      }
+      let sweep = m.a1 - m.a0;
+      while (sweep > Math.PI * 2) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI * 2) sweep += Math.PI * 2;
+      const da = ds / Math.max(0.12, m.r);
+      const dir = sweep >= 0 ? 1 : -1;
+      for (let a = 0; a <= Math.abs(sweep) + 1e-6; a += da) {
+        const ang = m.a0 + dir * a;
+        const ca = Math.cos(ang);
+        const sa = Math.sin(ang);
+        const tx = -sa;
+        const tz = ca;
+        for (let k = 0; k < offs.length; k++) {
+          const r = m.r + offs[k];
+          const x = m.cx + ca * r;
+          const z = m.cz + sa * r;
+          if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+          fn(x, z, tx, tz, h);
+        }
+      }
+    }
+  }
+
+  /** Walk tine bottoms so the trough stays packed grit, not a bare slab. */
+  forEachTrough(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    step: number,
+    fn: (x: number, z: number, alongX: number, alongZ: number, h: number) => void,
+  ): void {
+    const ds = Math.max(0.012, step);
+    for (let i = 0; i < this.marks.length; i++) {
+      const m = this.marks[i];
+      const offs = troughOffsets(m.multi);
+      const h = -m.depth * 0.85;
       if (m.kind === "seg") {
         const dx = m.bx - m.ax;
         const dz = m.bz - m.az;
@@ -928,6 +982,14 @@ function ridgeOffsets(multi: boolean): number[] {
     const mid = (t - center) * TINE_GAP;
     out.push(mid + RIDGE_OFF, mid - RIDGE_OFF);
   }
+  return out;
+}
+
+function troughOffsets(multi: boolean): number[] {
+  if (!multi) return [0];
+  const out: number[] = [];
+  const center = (TINES - 1) / 2;
+  for (let t = 0; t < TINES; t++) out.push((t - center) * TINE_GAP);
   return out;
 }
 
