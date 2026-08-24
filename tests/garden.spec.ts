@@ -66,14 +66,14 @@ test.describe("Zen Garden", () => {
     const placed = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
       const spots: Array<[number, number]> = [
+        [0, 2.35],
+        [1.4, 2.2],
+        [-1.2, 2.25],
         [2.15, -1.35],
         [-2.4, 2.1],
         [3.2, 2.4],
         [-3.1, -2.2],
         [0.8, 3.0],
-        [-0.6, -3.1],
-        [1.6, 1.8],
-        [-1.8, -0.4],
       ];
       return spots.some(([x, z]) => api.placeStoneAt(x, z));
     });
@@ -177,17 +177,21 @@ test.describe("Zen Garden", () => {
       return {
         stats: api.getStoneStats(),
         foliage: api.getFoliageCount(),
+        moss: api.getMossCount(),
         stones: save?.stones ?? [],
       };
     });
 
-    expect(layout.stats.count).toBeGreaterThanOrEqual(5);
-    expect(layout.stats.clustered).toBeGreaterThanOrEqual(5);
+    expect(layout.stats.count).toBe(15);
+    expect(layout.stats.clustered).toBe(15);
+    expect(layout.stats.clusterSizes).toEqual([5, 3, 3, 3, 1]);
+    expect(layout.stats.clusterSizes.every((n) => n % 2 === 1)).toBe(true);
     expect(layout.stats.tilted).toBeGreaterThanOrEqual(4);
     expect(layout.stats.minDist).toBeGreaterThan(0.55);
     expect(layout.stats.minDist).toBeLessThan(1.35);
     expect(layout.stats.scaleMax / Math.max(0.01, layout.stats.scaleMin)).toBeGreaterThan(1.35);
     expect(layout.foliage).toBeGreaterThan(18);
+    expect(layout.moss).toBe(5);
     expect(layout.stones.some((s) => typeof s.tiltX === "number" && typeof s.tiltZ === "number")).toBe(true);
     expect(layout.stones.some((s) => s.cluster === 0)).toBe(true);
 
@@ -195,5 +199,32 @@ test.describe("Zen Garden", () => {
     expect(stored).toBeTruthy();
     expect(stored!).toContain('"tiltX"');
     expect(stored!).toContain('"cluster"');
+  });
+
+  test("gravel is pale and rake strokes stay linear", async ({ page }) => {
+    await page.goto("/");
+    await waitForGarden(page);
+    await page.evaluate(() => window.__ZEN_GARDEN__!.plantSeed(3596739839));
+
+    const before = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      return {
+        tone: api.getSandTone(),
+        parallel: api.sampleGrooveDeviation(-3.4, 2.2, 3.4, 2.2),
+      };
+    });
+    expect(before.tone.luma).toBeGreaterThan(150);
+    expect(before.tone.r - before.tone.b).toBeLessThan(40);
+    expect(before.parallel).toBeLessThan(2.4);
+
+    const afterRake = await page.evaluate(() => {
+      const api = window.__ZEN_GARDEN__!;
+      api.rakeFromTo(-3.3, 2.18, 3.3, 2.18);
+      return api.sampleGrooveDeviation(-3.3, 2.18, 3.3, 2.18);
+    });
+    expect(afterRake).toBeLessThan(1.6);
+
+    await page.getByTestId("tool-rake").click();
+    await expect(page.getByTestId("hint")).toContainText(/straight/i);
   });
 });

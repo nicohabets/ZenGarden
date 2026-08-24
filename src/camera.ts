@@ -12,7 +12,7 @@ export class CameraRig {
   readonly target = new THREE.Vector3(0, 0.15, 0);
   azimuth = Math.PI / 4;
   elevation = ISO_ELEVATION;
-  zoom = 11.8;
+  zoom = 13.2;
   aspect = 1;
 
   constructor() {
@@ -37,8 +37,8 @@ export class CameraRig {
     const scale = this.zoom * 0.0022;
     this.target.x += (-dx * cos - dz * sin) * scale;
     this.target.z += (dx * sin - dz * cos) * scale;
-    this.target.x = THREE.MathUtils.clamp(this.target.x, -4.5, 4.5);
-    this.target.z = THREE.MathUtils.clamp(this.target.z, -4, 4);
+    this.target.x = THREE.MathUtils.clamp(this.target.x, -5.4, 5.4);
+    this.target.z = THREE.MathUtils.clamp(this.target.z, -3.6, 3.6);
     this.sync();
   }
 

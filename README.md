@@ -1,6 +1,6 @@
 # Zen Garden
 
-A free, calm, isometric 3D zen garden. Rake sand, place and move stones, and tend a bonsai. The layout is generated from a seed. Your garden is saved only in this browser — there is no account and no database.
+A free, calm, isometric 3D zen garden in the spirit of Ryoan-ji: a pale gravel court, odd-numbered ishi-gumi stone groups, and straight rake lines. Place and move stones, and tend a bonsai at the edge of the court. The layout is generated from a seed. Your garden is saved only in this browser — there is no account and no database.
 
 ## Play
 
@@ -14,11 +14,11 @@ Open the site and the garden is ready.
 | Zoom | Scroll wheel | Pinch |
 | Tools | Toolbar, or keys `1`–`5` | Large toolbar buttons |
 
-Atmosphere: granite and basalt stones in ishi-gumi clusters (some with moss and lichen), a larger branched bonsai, stone lanterns with a warm glow, koi in the basin, wind in the foliage, falling petals after watering, and a season mark (春夏秋冬) that turns with care.
+Atmosphere: a rectangular white-grey gravel court with weathered granite and basalt stones in five ishi-gumi groups (15 stones, odd counts), moss islands at their bases, a quieter bonsai at the edge, stone lanterns with a warm glow, koi in the basin, wind in the foliage, falling petals after watering, and a season mark (春夏秋冬) that turns with care.
 
 Tools:
 
-- **Rake** — draw grooves in the sand
+- **Rake** — draw straight grooves in the gravel
 - **Stone** — tap empty sand to place a stone, drag a stone to move it
 - **Water** — tap the bonsai
 - **Prune** — tap foliage (two clusters always remain)
@@ -95,4 +95,4 @@ npm run cf:preview
 
 ## Stack
 
-TypeScript, Vite, Three.js. No React, no auth, no server store. The garden is an orthographic (isometric) scene with a rakeable sand texture, irregular garden stones, moss, a water basin, and a bonsai you can water, prune, and move.
+TypeScript, Vite, Three.js. No React, no auth, no server store. The garden is an orthographic (isometric) scene with a rakeable gravel texture (straight comb lines), irregular garden stones, moss islands, a water basin, and a bonsai you can water, prune, and move.

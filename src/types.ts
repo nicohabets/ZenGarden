@@ -86,6 +86,14 @@ export interface StoneStats {
   scaleMax: number;
   tilted: number;
   clustered: number;
+  clusterSizes: number[];
+}
+
+export interface SandTone {
+  r: number;
+  g: number;
+  b: number;
+  luma: number;
 }
 
 export interface ZenGardenAPI {
@@ -103,11 +111,15 @@ export interface ZenGardenAPI {
   getLanternCount(): number;
   getFoliageCount(): number;
   waterBonsai(): Season;
+  rakeFromTo(x1: number, z1: number, x2: number, z2: number): void;
+  sampleGrooveDeviation(x1: number, z1: number, x2: number, z2: number): number;
+  getSandTone(): SandTone;
+  getMossCount(): number;
 }
 
 export const GARDEN = {
-  width: 12,
-  depth: 9.6,
+  width: 14,
+  depth: 8.2,
   sandY: 0.02,
 } as const;
 
@@ -115,7 +127,7 @@ export const STORAGE_KEY = "zengarden.v1";
 export const MUTE_KEY = "zengarden.muted";
 
 export const TOOL_HINTS: Record<ToolId, string> = {
-  rake: "Draw grooves through the sand",
+  rake: "Draw straight grooves through the gravel",
   stone: "Tap empty sand to place · drag a stone to move",
   water: "Water the bonsai — it grows, and the season turns",
   prune: "Tap foliage to prune",

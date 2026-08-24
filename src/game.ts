@@ -70,6 +70,8 @@ export class ZenGarden {
 
   private mode: "idle" | "rake" | "orbit" | "pan" | "pinch" | "drag-stone" | "drag-bonsai" = "idle";
   private lastSand: { x: number; z: number } | null = null;
+  private rakeOrigin: { x: number; z: number } | null = null;
+  private rakeDir: { x: number; z: number } | null = null;
   private lastPointer: Pointer | null = null;
   private pinchDist = 0;
   private dragId: string | null = null;
@@ -89,11 +91,11 @@ export class ZenGarden {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.toneMappingExposure = 1.02;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.background = new THREE.Color(0xe3d6c2);
-    this.scene.fog = new THREE.Fog(0xe3d6c2, 12, 32);
+    this.scene.background = new THREE.Color(0xc8c4bc);
+    this.scene.fog = new THREE.Fog(0xc8c4bc, 22, 46);
 
     this.audio = new AmbientAudio(loadMuted());
     this.sand = new SandField();
@@ -144,18 +146,18 @@ export class ZenGarden {
     this.rebuildLiving(world.stones);
     this.ui.setSeason(seasonFromBonsai(this.bonsaiState));
     this.sand.paintBase(hashSeed(seed));
-    this.sand.paintWaves(seed);
+    this.sand.paintParallel(seed);
     const raked = new Set<number>();
     for (const s of world.stones) {
-      if (s.cluster != null) {
-        if (raked.has(s.cluster)) continue;
-        raked.add(s.cluster);
-        this.sand.paintConcentric(s.x, s.z, 0.9 + s.scale * 0.7);
-      } else if (s.scale > 0.9) {
-        this.sand.paintConcentric(s.x, s.z, 0.55 + s.scale * 0.55);
-      }
+      if (s.cluster == null || raked.has(s.cluster)) continue;
+      raked.add(s.cluster);
+      const members = world.stones.filter((t) => t.cluster === s.cluster);
+      const cx = members.reduce((sum, t) => sum + t.x, 0) / members.length;
+      const cz = members.reduce((sum, t) => sum + t.z, 0) / members.length;
+      let reach = 0.55;
+      for (const t of members) reach = Math.max(reach, Math.hypot(t.x - cx, t.z - cz) + t.scale * 0.35);
+      this.sand.paintRing(cx, cz, reach + 0.45);
     }
-    this.sand.paintConcentric(this.basinState.x, this.basinState.z, 1.15);
     this.sand.flush();
     this.ui.setSeed(seed);
   }
@@ -172,10 +174,10 @@ export class ZenGarden {
       try {
         await this.sand.importDataUrl(save.sand);
       } catch {
-        this.sand.paintWaves(save.seed);
+        this.sand.paintParallel(save.seed);
       }
     } else {
-      this.sand.paintWaves(save.seed);
+      this.sand.paintParallel(save.seed);
     }
     this.cam.applyState(save.camera);
     this.ui.setSeed(save.seed);
@@ -202,27 +204,27 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xf6e6c8, 0x6e6a58, 0.68);
+    const hemi = new THREE.HemisphereLight(0xe8e6e0, 0x6a6860, 0.62);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xffe4b8, 1.14);
-    sun.position.set(8.5, 13, 6.5);
+    const sun = new THREE.DirectionalLight(0xfff2dc, 1.08);
+    sun.position.set(7.5, 14, 5.5);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.mapSize.set(1536, 1536);
     sun.shadow.camera.near = 2;
-    sun.shadow.camera.far = 40;
-    sun.shadow.camera.left = -12;
-    sun.shadow.camera.right = 12;
+    sun.shadow.camera.far = 42;
+    sun.shadow.camera.left = -14;
+    sun.shadow.camera.right = 14;
     sun.shadow.camera.top = 12;
     sun.shadow.camera.bottom = -12;
-    sun.shadow.bias = -0.0008;
+    sun.shadow.bias = -0.0007;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xc8d4e0, 0.34);
+    const fill = new THREE.DirectionalLight(0xd0d6dc, 0.38);
     fill.position.set(-8, 6, -4);
     this.scene.add(fill);
-    const rim = new THREE.DirectionalLight(0xf0e6d4, 0.16);
+    const rim = new THREE.DirectionalLight(0xe8e4dc, 0.18);
     rim.position.set(2, 4, -9);
     this.scene.add(rim);
-    this.scene.add(new THREE.AmbientLight(0xefe2cc, 0.18));
+    this.scene.add(new THREE.AmbientLight(0xddd8d0, 0.16));
   }
 
   private bindUi(): void {
@@ -326,6 +328,8 @@ export class ZenGarden {
     if (this.tool === "rake" && (hit.kind === "sand" || hit.kind === "moss")) {
       this.mode = "rake";
       this.lastSand = { x: hit.x, z: hit.z };
+      this.rakeOrigin = { x: hit.x, z: hit.z };
+      this.rakeDir = null;
       return;
     }
     if (this.tool === "stone" && hit.kind === "stone" && hit.id) {
@@ -388,13 +392,16 @@ export class ZenGarden {
     const sand = this.groundPoint(e.clientX, e.clientY);
     if (!sand) return;
 
-    if (this.mode === "rake" && this.lastSand) {
-      this.sand.rake(this.lastSand.x, this.lastSand.z, sand.x, sand.z, this.blockers());
-      this.lastSand = sand;
-      const now = performance.now();
-      if (now - this.rakeSoundAt > 90) {
-        this.audio.rakeTick();
-        this.rakeSoundAt = now;
+    if (this.mode === "rake" && this.lastSand && this.rakeOrigin) {
+      const next = this.snapRakePoint(sand.x, sand.z);
+      if (next) {
+        this.sand.rake(this.lastSand.x, this.lastSand.z, next.x, next.z, this.blockers());
+        this.lastSand = next;
+        const now = performance.now();
+        if (now - this.rakeSoundAt > 90) {
+          this.audio.rakeTick();
+          this.rakeSoundAt = now;
+        }
       }
       return;
     }
@@ -403,7 +410,7 @@ export class ZenGarden {
       return;
     }
     if (this.mode === "drag-bonsai") {
-      if (inBounds(sand.x, sand.z, 1.15)) {
+      if (inBounds(sand.x, sand.z, 0.85)) {
         this.bonsaiState.x = sand.x;
         this.bonsaiState.z = sand.z;
         this.bonsai.setPose(sand.x, sand.z, this.bonsaiState.rotY);
@@ -420,6 +427,8 @@ export class ZenGarden {
     }
     this.mode = this.pointers.size >= 2 ? "pinch" : "idle";
     this.lastSand = null;
+    this.rakeOrigin = null;
+    this.rakeDir = null;
     this.dragId = null;
     this.lastPointer = null;
     try {
@@ -434,8 +443,8 @@ export class ZenGarden {
     for (const s of this.stones.stones) {
       if ((s.x - x) ** 2 + (s.z - z) ** 2 < 0.55) return false;
     }
-    if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.7) return false;
-    if ((this.basinState.x - x) ** 2 + (this.basinState.z - z) ** 2 < 1.2) return false;
+    if ((this.bonsaiState.x - x) ** 2 + (this.bonsaiState.z - z) ** 2 < 1.05) return false;
+    if ((this.basinState.x - x) ** 2 + (this.basinState.z - z) ** 2 < 0.95) return false;
     for (const l of this.lanternStates) {
       if ((l.x - x) ** 2 + (l.z - z) ** 2 < 0.7) return false;
     }
@@ -456,8 +465,8 @@ export class ZenGarden {
 
   private blockers(): Blocker[] {
     const list: Blocker[] = [
-      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 1.05 },
-      { x: this.basinState.x, z: this.basinState.z, r: 0.75 },
+      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.68 },
+      { x: this.basinState.x, z: this.basinState.z, r: 0.58 },
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });
     for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.32 + s.scale * 0.18 });
@@ -593,8 +602,33 @@ export class ZenGarden {
       getLanternCount: () => this.lanternStates.length,
       getFoliageCount: () => this.bonsai.foliage.size,
       waterBonsai: () => this.waterBonsai(),
+      rakeFromTo: (x1, z1, x2, z2) => {
+        this.sand.rake(x1, z1, x2, z2, this.blockers());
+        this.sand.flush();
+      },
+      sampleGrooveDeviation: (x1, z1, x2, z2) => this.sand.sampleGrooveDeviation(x1, z1, x2, z2),
+      getSandTone: () => this.sand.getSandTone(),
+      getMossCount: () => this.mossStates.length,
     };
     window.__ZEN_GARDEN__ = api;
+  }
+
+  private snapRakePoint(x: number, z: number): { x: number; z: number } | null {
+    const origin = this.rakeOrigin;
+    if (!origin) return null;
+    if (!this.rakeDir) {
+      const dx = x - origin.x;
+      const dz = z - origin.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.16) return null;
+      const step = Math.PI / 12;
+      const snapped = Math.round(Math.atan2(dz, dx) / step) * step;
+      this.rakeDir = { x: Math.cos(snapped), z: Math.sin(snapped) };
+    }
+    const t = (x - origin.x) * this.rakeDir.x + (z - origin.z) * this.rakeDir.z;
+    const next = { x: origin.x + this.rakeDir.x * t, z: origin.z + this.rakeDir.z * t };
+    if (!inBounds(next.x, next.z, 0.12)) return null;
+    return next;
   }
 }
 

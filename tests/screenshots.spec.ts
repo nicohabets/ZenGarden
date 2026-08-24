@@ -2,7 +2,7 @@ import { test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
 const outDir = "docs/screenshots";
-/** Known layout: ishi-gumi granite clusters and a large bonsai in frame. */
+/** Known layout: Ryoan-ji 15-stone groups on a pale gravel court. */
 const SHOT_SEED = 3596739839;
 
 test.describe("screenshots", () => {
