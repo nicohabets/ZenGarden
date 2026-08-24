@@ -17,6 +17,7 @@ import {
   createLanterns,
   createMoss,
   MOSS_FOOT,
+  MOSS_GRAIN_PAD,
   scatterGravel,
   updateLanterns,
   updateWater,
@@ -531,9 +532,9 @@ export class ZenGarden {
       list.push({
         x: m.x,
         z: m.z,
-        r: m.scale * MOSS_FOOT.x,
-        rx: m.scale * MOSS_FOOT.x,
-        rz: m.scale * MOSS_FOOT.z,
+        r: m.scale * MOSS_FOOT.x + MOSS_GRAIN_PAD,
+        rx: m.scale * MOSS_FOOT.x + MOSS_GRAIN_PAD,
+        rz: m.scale * MOSS_FOOT.z + MOSS_GRAIN_PAD,
         rotY: m.rotY,
       });
     }

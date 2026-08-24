@@ -29,7 +29,9 @@ function clayTexture(): THREE.CanvasTexture {
  * Moss foot in units of `moss.scale`. Grain keep-out uses the same ellipse
  * so grit meets moss and never sits on it.
  */
-export const MOSS_FOOT = { x: 0.58, z: 0.50 } as const;
+export const MOSS_FOOT = { x: 0.60, z: 0.52 } as const;
+/** Extra metres beyond the mound so grain bodies stay on the court. */
+export const MOSS_GRAIN_PAD = 0.01;
 
 /** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
 export function createGround(): THREE.Group {
@@ -200,12 +202,12 @@ export function createMoss(states: MossState[]): THREE.Group {
     vertexColors: true,
   });
   const mossFootMat = new THREE.MeshStandardMaterial({
-    color: 0x6a8a48,
+    color: 0x4e6838,
     map: mossMap,
-    roughness: 0.94,
+    roughness: 0.96,
     metalness: 0,
-    emissive: 0x2a3a18,
-    emissiveIntensity: 0.28,
+    emissive: 0x1a2810,
+    emissiveIntensity: 0.22,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
@@ -227,7 +229,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     // the court never shows a tan/grey strip between grit and moss.
     // Wall only. A closed cap caught the key light and read as a tan slab.
     const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 0.18, 28, 1, true), mossFootMat);
-    foot.scale.set(s.scale * MOSS_FOOT.x, 1, s.scale * MOSS_FOOT.z);
+    foot.scale.set(s.scale * MOSS_FOOT.x + MOSS_GRAIN_PAD, 1, s.scale * MOSS_FOOT.z + MOSS_GRAIN_PAD);
     foot.position.y = 0.03;
     foot.receiveShadow = true;
     foot.userData.kind = "moss";

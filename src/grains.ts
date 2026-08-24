@@ -72,9 +72,10 @@ export class GrainCloud {
   private layout(cam: CameraRig, sand: SandField, blockers: Blocker[], viewH: number): void {
     const court = courtBounds();
     const close = cam.zoom < 1.2;
-    // Close-up uses the real ground footprint. A short frustum left a tan
-    // slab past the last grain row (the "teeth on the bank edge").
-    const bounds = close ? slantBounds(cam) : court;
+    // Mid-zoom (island-rings) also uses the view footprint so grains stay
+    // small enough to meet moss. Full-court planting at that zoom made
+    // pebbles large enough to sit on the mound.
+    const bounds = cam.zoom < 2.5 ? slantBounds(cam) : court;
     const x0 = Math.max(court.x0, bounds.x0);
     const x1 = Math.min(court.x1, bounds.x1);
     const z0 = Math.max(court.z0, bounds.z0);
@@ -89,11 +90,9 @@ export class GrainCloud {
     const screenWorld = (targetPx * cam.zoom) / px;
     // Overlap so the bed is opaque packed grit, not a tan plane in the gaps.
     const worldSize = Math.max(spacing * 1.78, screenWorld);
-    // Inflate keep-out by a grain radius so bodies meet moss and do not sit on it.
-    const keep = inflateBlockers(blockers, worldSize * 0.55);
 
     let n = 0;
-    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, keep, Math.floor(this.maxCount * 0.68), 0, 0.2);
+    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2);
     n = this.plantCarpet(
       n,
       x0 + spacing * 0.5,
@@ -102,7 +101,7 @@ export class GrainCloud {
       z1,
       spacing,
       sand,
-      keep,
+      blockers,
       carpetCap,
       0,
       0.16,
@@ -116,7 +115,7 @@ export class GrainCloud {
       z1,
       spacing * 0.92,
       sand,
-      keep,
+      blockers,
       Math.floor(this.maxCount * 0.95),
       0,
       0.18,
@@ -134,7 +133,7 @@ export class GrainCloud {
       for (let k = -troughHalf; k <= troughHalf && n < troughCap; k += troughStep) {
         const gx = x + nx * k + (hash2((x * 67 + k * 40) | 0, 3) - 0.5) * spacing * 0.2;
         const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.2;
-        if (blocked(gx, gz, keep)) continue;
+        if (blocked(gx, gz, blockers)) continue;
         n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 90) | 0, (gz * 90) | 0), 0);
       }
     });
@@ -145,7 +144,7 @@ export class GrainCloud {
       const seed = hash2((x * 73) | 0, (z * 91) | 0);
       const bx = x + (seed - 0.5) * spacing * 0.2;
       const bz = z + (hash2((z * 91) | 0, 5) - 0.5) * spacing * 0.2;
-      if (blocked(bx, bz, keep)) return;
+      if (blocked(bx, bz, blockers)) return;
       n = this.pushGrain(n, bx, bz, Math.max(h, sand.sampleHeight(bx, bz)), seed, 0);
     });
 
@@ -301,15 +300,6 @@ function slantBounds(cam: CameraRig): { x0: number; z0: number; x1: number; z1: 
   }
   const pad = Math.max(0.22, cam.zoom * 0.45);
   return { x0: x0 - pad, z0: z0 - pad, x1: x1 + pad, z1: z1 + pad };
-}
-
-function inflateBlockers(blockers: Blocker[], pad: number): Blocker[] {
-  return blockers.map((b) => ({
-    ...b,
-    r: b.r + pad,
-    rx: b.rx ? b.rx + pad : undefined,
-    rz: b.rz ? b.rz + pad : undefined,
-  }));
 }
 
 function blocked(x: number, z: number, blockers: Blocker[]): boolean {

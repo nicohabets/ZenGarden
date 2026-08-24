@@ -73,15 +73,15 @@ test.describe("screenshots", () => {
     await page.screenshot({ path: `${outDir}/desktop-hud.png`, animations: "disabled" });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.evaluate((look) => {
+    await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.56,
-        elevation: 0.52,
-        zoom: 1.72,
-        tx: look.cx + 0.04,
-        tz: look.cz + 0.2,
+        azimuth: 0.92,
+        elevation: 0.36,
+        zoom: 0.95,
+        tx: -0.35,
+        tz: 1.88,
       });
-    }, island);
+    });
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${outDir}/mobile-close.png`, animations: "disabled" });
   });
