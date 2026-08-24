@@ -37,11 +37,8 @@ export class GrainCloud {
     this.layers = new Float32Array(this.maxCount);
 
     const geo = makeGritGeometry();
-    const mat = new THREE.MeshStandardMaterial({
-      roughness: 0.98,
-      metalness: 0,
-      envMapIntensity: 0,
-      vertexColors: false,
+    const mat = new THREE.MeshBasicMaterial({
+      toneMapped: true,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
     this.mesh.frustumCulled = false;
@@ -137,7 +134,7 @@ export class GrainCloud {
       const seed = this.seeds[i];
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
       const pile = Math.max(0, h);
-      const y = GARDEN.sandY + 0.0016 + pile * 0.95 + this.layers[i] * (0.0032 + pile * 0.06) + (seed - 0.5) * 0.0014;
+      const y = GARDEN.sandY + 0.0018 + pile * 1.15 + this.layers[i] * (0.0036 + pile * 0.08) + (seed - 0.5) * 0.0012;
       const s = worldSize * (0.7 + seed * 0.42);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 5.1, seed * 6.8, hash2(i + 3, 17) * 6.2);
@@ -154,17 +151,15 @@ export class GrainCloud {
 }
 
 function makeGritGeometry(): THREE.BufferGeometry {
-  const geo = isMobileGarden() && !wantHighQuality()
-    ? new THREE.OctahedronGeometry(0.5, 0)
-    : new THREE.IcosahedronGeometry(0.5, 0);
-  geo.scale(1.05, 0.38, 0.82);
+  const geo = new THREE.SphereGeometry(0.5, 4, 3);
+  geo.scale(1.12, 0.3, 0.86);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
-    const k = hash2((x * 17) | 0, (z * 13) | 0);
-    pos.setXYZ(i, x * (0.9 + k * 0.16), y * (0.85 + k * 0.2), z * (0.9 + (1 - k) * 0.14));
+    const k = hash2((x * 21) | 0, (z * 15) | 0);
+    pos.setXYZ(i, x * (0.88 + k * 0.2), y * (0.8 + k * 0.28), z * (0.86 + (1 - k) * 0.2));
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();
