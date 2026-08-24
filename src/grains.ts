@@ -144,7 +144,7 @@ export class GrainBed {
     const halfH = THREE.MathUtils.clamp(zoom * 0.7 * stretch, 0.85, 2.9);
     const halfW = THREE.MathUtils.clamp(zoom * 0.62 * Math.max(1.15, aspect), 0.7, 2.5);
     const area = halfW * 2 * halfH * 2;
-    const spacing = THREE.MathUtils.clamp(Math.sqrt(area / (this.maxNear * 0.78)), this.nearMinSpacing, 0.018);
+    const spacing = THREE.MathUtils.clamp(Math.sqrt(area / (this.maxNear * 0.84)), this.nearMinSpacing, 0.026);
     const cols = Math.max(8, Math.ceil((halfW * 2) / spacing));
     const rows = Math.max(8, Math.ceil((halfH * 2) / (spacing * 0.86)));
     let n = 0;
@@ -154,8 +154,8 @@ export class GrainBed {
       for (let i = 0; i < cols && n < max; i++) {
         const jx = hash01(i * 19 + 3, j * 29 + 11) - 0.5;
         const jz = hash01(i * 41 + 7, j * 17 + 5) - 0.5;
-        const x = tx + (i + hex - cols * 0.5 + jx * 0.72) * spacing;
-        const z = tz + (j - rows * 0.5 + jz * 0.72) * spacing * 0.86;
+        const x = tx + (i + hex - cols * 0.5 + jx * 0.94) * spacing;
+        const z = tz + (j - rows * 0.5 + jz * 0.94) * spacing * 0.86;
         if (Math.abs(x) > GARDEN.width * 0.5 - 0.04 || Math.abs(z) > GARDEN.depth * 0.5 - 0.04) continue;
         writePose(this.nearX, this.nearZ, this.nearRx, this.nearRy, this.nearRz, this.nearSx, this.nearSy, this.nearSz, n, x, z, i, j, 0.72);
         this.nearLayer[n] = 0;
@@ -245,7 +245,8 @@ export class GrainBed {
       }
       const pile = Math.max(0, posed.h);
       const furrow = posed.h < -0.01 ? 0.48 : 1;
-      const lift = sy[i] * 0.48 * furrow + (stack === 1 ? 0.007 + pile * 0.35 : 0) + pile * 0.32;
+      const yJit = (hash01(i, 77) - 0.32) * 0.012;
+      const lift = sy[i] * 0.62 * furrow + (stack === 1 ? 0.01 + pile * 0.55 : 0) + pile * 0.85 + yJit;
       dummy.position.set(posed.x, GARDEN.sandY + posed.h + lift, posed.z);
       dummy.rotation.set(rx[i] + posed.tiltX, ry[i], rz[i] + posed.tiltZ);
       dummy.scale.set(sx[i] * (1 + pile * 1.6) * furrow, sy[i] * (1 + pile * 2.4) * furrow, sz[i] * (1 + pile * 1.6) * furrow);
@@ -341,8 +342,8 @@ function layoutBed(spacing: number, maxBed: number): {
     for (let i = 0; i < cols && n < count; i++) {
       const jx = hash01(i * 7 + 2, j * 11 + 4) - 0.5;
       const jz = hash01(i * 13 + 5, j * 3 + 8) - 0.5;
-      const gx = x0 + (i + hex + jx * 0.7) * spacing;
-      const gz = z0 + (j + jz * 0.7) * spacing * 0.86;
+      const gx = x0 + (i + hex + jx * 0.92) * spacing;
+      const gz = z0 + (j + jz * 0.92) * spacing * 0.86;
       if (Math.abs(gx) > GARDEN.width * 0.5 - 0.03 || Math.abs(gz) > GARDEN.depth * 0.5 - 0.03) continue;
       writePose(x, z, rx, ry, rz, sx, sy, sz, n, gx, gz, i, j, 1);
       n += 1;
@@ -372,10 +373,10 @@ function writePose(
   rx[i] = hash01(col, row + 21) * Math.PI;
   ry[i] = hash01(col + 9, row) * Math.PI * 2;
   rz[i] = hash01(col + 3, row + 7) * Math.PI;
-  const s = (0.0062 + hash01(col + 15, row + 4) * 0.0088) * size;
-  sx[i] = s * (0.78 + hash01(col, row + 33) * 0.55);
-  sy[i] = s * (0.62 + hash01(col + 18, row) * 0.5);
-  sz[i] = s * (0.74 + hash01(col + 4, row + 12) * 0.52);
+  const s = (0.0054 + hash01(col + 15, row + 4) * 0.0115) * size;
+  sx[i] = s * (0.55 + hash01(col, row + 33) * 1.05);
+  sy[i] = s * (0.42 + hash01(col + 18, row) * 0.95);
+  sz[i] = s * (0.52 + hash01(col + 4, row + 12) * 1.0);
 }
 
 function makeInstanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number): THREE.InstancedMesh {

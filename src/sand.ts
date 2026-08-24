@@ -103,8 +103,8 @@ export class SandField {
       roughness: 0.96,
       metalness: 0,
       displacementMap: this.texture,
-      displacementScale: H_RANGE,
-      displacementBias: H_MIN,
+      displacementScale: H_RANGE * 0.2,
+      displacementBias: H_MIN * 0.2,
       envMapIntensity: 0,
       emissive: 0x2a261e,
       emissiveIntensity: 0.08,
@@ -112,7 +112,7 @@ export class SandField {
     applySandBedShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE);
 
     this.mesh = new THREE.Mesh(geo, mat);
-    this.mesh.position.y = GARDEN.sandY - 0.006;
+    this.mesh.position.y = GARDEN.sandY - 0.012;
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = false;
     this.mesh.userData.kind = "sand";

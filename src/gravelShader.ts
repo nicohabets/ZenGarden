@@ -103,9 +103,9 @@ export function applySandBedShader(
          vec3 deep = vec3(0.62, 0.58, 0.53);
          vec3 col = mix(mid, pale, g0.x);
          col = mix(col, mix(deep, mid, g1.x), 0.22);
-         col *= mix(0.72, 1.0, g0.y);
-         col *= mix(1.0, 0.58, trough);
-         col *= mix(1.0, 1.08, crest);
+         col *= mix(0.68, 1.0, g0.y);
+         col *= mix(1.0, 0.48, trough);
+         col *= mix(1.0, 1.1, crest);
          diffuseColor.rgb = col;
         `,
       )
@@ -127,5 +127,5 @@ export function applySandBedShader(
         `,
       );
   };
-  mat.customProgramCacheKey = () => "sand-bed-grit-v2";
+  mat.customProgramCacheKey = () => "sand-bed-grit-v3";
 }
