@@ -113,8 +113,6 @@ export class SandField {
       emissive: 0x000000,
       emissiveIntensity: 0,
     });
-    applyFloorShade(mat);
-
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = 1.5;
     mat.polygonOffsetUnits = 1.5;
@@ -747,22 +745,6 @@ export class SandField {
     }
     return true;
   }
-}
-
-function applyFloorShade(mat: THREE.MeshStandardMaterial): void {
-  mat.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <map_fragment>",
-      `#include <map_fragment>
-       float sandH = texture2D(displacementMap, vDisplacementMapUv).r;
-       float trough = smoothstep(0.56, 0.34, sandH);
-       float crest = smoothstep(0.5, 0.74, sandH);
-       diffuseColor.rgb *= mix(1.0, 0.42, trough);
-       diffuseColor.rgb += vec3(0.045, 0.035, 0.02) * crest;
-      `,
-    );
-  };
-  mat.customProgramCacheKey = () => "sand-floor-trough-ao-v1";
 }
 
 function hash2(x: number, y: number): number {

@@ -6,17 +6,27 @@ import { GARDEN, type Blocker } from "./types";
 
 /** Visible grit sitting on the mass field. Budget keeps a 60fps mobile path. */
 export function grainBudget(): number {
-  if (wantHighQuality()) return 160_000;
-  if (isMobileGarden()) return 48_000;
-  return 150_000;
+  if (wantHighQuality()) return 150_000;
+  if (isMobileGarden()) return 46_000;
+  return 140_000;
 }
 
 const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
+const _nudge = [
+  [0.045, 0],
+  [-0.045, 0],
+  [0, 0.045],
+  [0, -0.045],
+  [0.032, 0.032],
+  [-0.032, 0.032],
+  [0.032, -0.032],
+  [-0.032, -0.032],
+] as const;
 
 /**
- * Packed millimetre grit. Troughs stay empty-ish; banks are stacked lumps
- * that follow the mass field so a rake reads as scooped sand, not a carpet.
+ * Packed millimetre grit. A rake relocates mass onto the banks and leaves
+ * the trough empty, so grooves are scooped piles, not a thinned carpet.
  */
 export class GrainCloud {
   readonly mesh: THREE.InstancedMesh;
@@ -79,27 +89,31 @@ export class GrainCloud {
     const z1 = Math.min(GARDEN.depth / 2 - 0.03, bounds.z1);
     const spanX = Math.max(0.1, x1 - x0);
     const spanZ = Math.max(0.1, z1 - z0);
-    const surfaceBudget = Math.floor(this.maxCount * 0.7);
-    const spacing = Math.max(0.00125, Math.sqrt((spanX * spanZ) / Math.max(8, surfaceBudget)));
-    const worldSize = spacing * 1.18;
+    const cellBudget = Math.floor(this.maxCount * 0.62);
+    const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, cellBudget)));
+    const worldSize = spacing * 1.05;
 
-    const hex = spacing * 0.86602540378;
     let n = 0;
     let row = 0;
-    for (let z = z0; z <= z1 && n < surfaceBudget; z += hex, row++) {
-      const xShift = row & 1 ? spacing * 0.5 : 0;
-      for (let x = x0 + xShift; x <= x1 && n < surfaceBudget; x += spacing) {
+    for (let z = z0; z <= z1 && n < cellBudget; z += spacing, row++) {
+      for (let x = x0; x <= x1 && n < cellBudget; x += spacing) {
         const col = ((x - x0) / spacing) | 0;
-        const jx = hash2(row * 13 + 3, col) - 0.5;
-        const jz = hash2(row * 29 + 7, col + 11) - 0.5;
-        const gx = x + jx * spacing * 0.28;
-        const gz = z + jz * spacing * 0.28;
+        const hx = hash2(row * 19 + 3, col * 11 + 5);
+        const hz = hash2(row * 41 + 7, col * 23 + 2);
+        let gx = x + (hx - 0.5) * spacing * 0.82;
+        let gz = z + (hz - 0.5) * spacing * 0.82;
         if (gx < x0 || gx > x1 || gz < z0 || gz > z1) continue;
         if (blocked(gx, gz, blockers)) continue;
-        const seed = hash2(row * 17 + 4, n * 3 + 9);
-        const h = sand.sampleHeight(gx, gz);
-        if (h < -0.018 && seed > 0.08) continue;
-        if (h < -0.008 && seed > 0.22) continue;
+        const seed = hash2(row * 17 + 4, col * 13 + 9);
+        let h = sand.sampleHeight(gx, gz);
+        if (h < -0.006) {
+          const moved = nudgeToBank(sand, gx, gz, h);
+          gx = moved.x;
+          gz = moved.z;
+          h = moved.h;
+          if (blocked(gx, gz, blockers)) continue;
+        }
+        if (h < -0.01 && seed > 0.06) continue;
         this.xs[n] = gx;
         this.zs[n] = gz;
         this.seeds[n] = seed;
@@ -109,15 +123,14 @@ export class GrainCloud {
     }
 
     const surface = n;
-    const pileBudget = this.maxCount - n;
     for (let i = 0; i < surface && n < this.maxCount; i++) {
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
-      if (h < 0.005) continue;
-      const stacks = h > 0.022 ? 3 : h > 0.01 ? 2 : 1;
-      for (let layer = 1; layer <= stacks && n < this.maxCount && n - surface < pileBudget; layer++) {
+      if (h < 0.004) continue;
+      const stacks = h > 0.03 ? 5 : h > 0.018 ? 4 : h > 0.01 ? 3 : 2;
+      for (let layer = 1; layer <= stacks && n < this.maxCount; layer++) {
         const seed = hash2(i + 19 + layer * 7, 23);
-        this.xs[n] = this.xs[i] + (this.seeds[i] - 0.5) * spacing * 0.3;
-        this.zs[n] = this.zs[i] + (hash2(i + 5, 41 + layer) - 0.5) * spacing * 0.3;
+        this.xs[n] = this.xs[i] + (this.seeds[i] - 0.5) * spacing * 0.45;
+        this.zs[n] = this.zs[i] + (hash2(i + 5, 41 + layer) - 0.5) * spacing * 0.45;
         this.seeds[n] = seed;
         this.layers[n] = layer;
         n += 1;
@@ -133,8 +146,8 @@ export class GrainCloud {
     const bounds = slantBounds(cam);
     const spanX = Math.max(0.1, bounds.x1 - bounds.x0);
     const spanZ = Math.max(0.1, bounds.z1 - bounds.z0);
-    const spacing = Math.max(0.00125, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.7))));
-    this.writeInstances(sand, spacing * 1.18);
+    const spacing = Math.max(0.0013, Math.sqrt((spanX * spanZ) / Math.max(8, Math.floor(this.maxCount * 0.62))));
+    this.writeInstances(sand, spacing * 1.05);
   }
 
   private writeInstances(sand: SandField, worldSize: number): void {
@@ -143,15 +156,21 @@ export class GrainCloud {
       const seed = this.seeds[i];
       const h = sand.sampleHeight(this.xs[i], this.zs[i]);
       const layer = this.layers[i];
-      const y = GARDEN.sandY + h * 1.85 + 0.0012 + layer * (0.003 + Math.max(0, h) * 0.1) + (seed - 0.5) * 0.0008;
-      const s = worldSize * (0.7 + seed * 0.28);
+      const pile = Math.max(0, h);
+      const y =
+        GARDEN.sandY +
+        h * 2.15 +
+        0.0014 +
+        layer * (0.0048 + pile * 0.12) +
+        (seed - 0.5) * 0.001;
+      const s = worldSize * (0.72 + seed * 0.3);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 4.2, seed * 6.1, hash2(i + 3, 17) * 5.4);
-      _dummy.scale.set(s * (0.9 + seed * 0.18), s * (0.62 + seed * 0.16), s * (0.84 + hash2(i, 9) * 0.2));
+      _dummy.scale.set(s * (0.88 + seed * 0.2), s * (0.7 + seed * 0.18), s * (0.86 + hash2(i, 9) * 0.18));
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
-      const crest = THREE.MathUtils.clamp(h * 3.2, -0.1, 0.12);
-      _color.setRGB(0.82 + seed * 0.07 + crest, 0.78 + seed * 0.055 + crest * 0.75, 0.7 + seed * 0.04 + crest * 0.45);
+      const crest = THREE.MathUtils.clamp(h * 2.8 + layer * 0.03, -0.08, 0.14);
+      _color.setRGB(0.83 + seed * 0.07 + crest, 0.79 + seed * 0.05 + crest * 0.7, 0.71 + seed * 0.04 + crest * 0.4);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -159,18 +178,47 @@ export class GrainCloud {
   }
 }
 
+function nudgeToBank(sand: SandField, x: number, z: number, h0: number): { x: number; z: number; h: number } {
+  let bx = x;
+  let bz = z;
+  let bh = h0;
+  for (const [dx, dz] of _nudge) {
+    const nx = x + dx;
+    const nz = z + dz;
+    const h = sand.sampleHeight(nx, nz);
+    if (h > bh) {
+      bh = h;
+      bx = nx;
+      bz = nz;
+    }
+  }
+  if (bh > h0 + 0.004) {
+    for (const [dx, dz] of _nudge) {
+      const nx = bx + dx * 0.7;
+      const nz = bz + dz * 0.7;
+      const h = sand.sampleHeight(nx, nz);
+      if (h > bh) {
+        bh = h;
+        bx = nx;
+        bz = nz;
+      }
+    }
+  }
+  return { x: bx, z: bz, h: bh };
+}
+
 function makeGritGeometry(): THREE.BufferGeometry {
   const segs = isMobileGarden() && !wantHighQuality() ? 5 : 6;
   const rings = isMobileGarden() && !wantHighQuality() ? 4 : 5;
   const geo = new THREE.SphereGeometry(0.5, segs, rings);
-  geo.scale(1.0, 0.82, 0.92);
+  geo.scale(1.0, 0.78, 0.9);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
     const k = hash2((x * 31) | 0, (z * 19) | 0);
-    pos.setXYZ(i, x * (0.92 + k * 0.12), y * (0.9 + k * 0.14), z * (0.9 + (1 - k) * 0.12));
+    pos.setXYZ(i, x * (0.9 + k * 0.14), y * (0.88 + k * 0.16), z * (0.88 + (1 - k) * 0.14));
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();
@@ -209,7 +257,7 @@ function blocked(x: number, z: number, blockers: Blocker[]): boolean {
   for (const b of blockers) {
     const dx = x - b.x;
     const dz = z - b.z;
-    if (dx * dx + dz * dz < b.r * b.r * 1.12) return true;
+    if (dx * dx + dz * dz < b.r * b.r * 1.15) return true;
   }
   return false;
 }

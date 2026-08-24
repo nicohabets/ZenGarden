@@ -38,10 +38,10 @@ test.describe("screenshots", () => {
 
     await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.08,
-        elevation: 0.2,
-        zoom: 0.39,
-        tx: -2.55,
+        azimuth: 0.05,
+        elevation: 0.185,
+        zoom: 0.38,
+        tx: -2.4,
         tz: 1.88,
       });
     });

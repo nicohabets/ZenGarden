@@ -137,8 +137,8 @@ export function createStoneGeometry(variant: number): THREE.BufferGeometry {
   if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 10, 5, 8), variant, 0.94, 0.03);
   else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 3), variant, 1.36, 0.028);
   else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 28, 20), variant, 0.56, 0.022);
-  else if (shape === "angular") geo = deform(new THREE.DodecahedronGeometry(0.74, 3), variant, 0.82, 0.034);
-  else geo = deform(new THREE.IcosahedronGeometry(0.9, 3), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.028);
+  else if (shape === "angular") geo = deform(new THREE.SphereGeometry(0.74, 22, 16), variant, 0.82, 0.02);
+  else geo = deform(new THREE.SphereGeometry(0.86, 24, 18), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.018);
 
   geo.userData.shared = true;
   geoCache.set(variant, geo);
