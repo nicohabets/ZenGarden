@@ -243,6 +243,8 @@ export function createStoneMesh(state: StoneState, moss: MossState[] = []): THRE
   mesh.userData.lithology = litho;
   addLichen(mesh, state);
   applyStoneTransform(mesh, state);
+  // A slab on the mound reads as the light rectangular grit chip.
+  if (shape === "slab" && stoneOnMoss(state, moss)) mesh.visible = false;
   return mesh;
 }
 
