@@ -518,8 +518,8 @@ export class ZenGarden {
   }
 
   /**
-   * Grain keep-out. Matches the closed moss mound. Instance write
-   * also hides any grain body that still overlaps the ellipse.
+   * Grain keep-out. The mound itself is larger (`MOSS_VISUAL`) so grit
+   * bodies never sit on moss and the shoreline is not a beige gap.
    */
   private grainBlockers(): Blocker[] {
     const list: Blocker[] = [

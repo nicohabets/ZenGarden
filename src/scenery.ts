@@ -26,12 +26,14 @@ function clayTexture(): THREE.CanvasTexture {
 }
 
 /**
- * Closed moss mound in units of `moss.scale`. Grain keep-out uses the
- * same ellipse so grit meets the mound and never sits on it.
+ * Closed moss mound in units of `moss.scale`. Keep-out is this ellipse.
+ * Visible moss is larger (`MOSS_VISUAL`) so it covers grain bodies and
+ * any underlay — no beige shoreline, no grit on the crown.
  */
 export const MOSS_FOOT = { x: 0.60, z: 0.52 } as const;
-/** Small metre pad so grain bodies stay off the mound. Moss scale is 1.04× foot. */
-export const MOSS_GRAIN_PAD = 0.016;
+export const MOSS_GRAIN_PAD = 0;
+/** Visible mound / keep-out. Must exceed HUD grain radius. */
+export const MOSS_VISUAL = 1.12;
 
 /** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
 export function createGround(): THREE.Group {
@@ -139,7 +141,11 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
     v.addScaledVector(n, wobble);
     v.y = v.y * 0.44 + 0.1;
     const nxz = Math.hypot(v.x, v.z) || 1;
-    if (nxz > 1) {
+    // Fill the equator so HUD cannot see beige through a dent.
+    if (Math.abs(n.y) < 0.55) {
+      v.x /= nxz;
+      v.z /= nxz;
+    } else if (nxz > 1) {
       v.x /= nxz;
       v.z /= nxz;
     }
@@ -184,11 +190,11 @@ export function createMoss(states: MossState[]): THREE.Group {
   const mossMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: mossMap,
-    roughness: 0.96,
+    roughness: 1,
     metalness: 0,
     envMapIntensity: 0,
-    emissive: 0x243318,
-    emissiveIntensity: 0.3,
+    emissive: 0x1c2a12,
+    emissiveIntensity: 0.24,
     vertexColors: true,
     side: THREE.FrontSide,
     depthWrite: true,
@@ -202,7 +208,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     island.userData.kind = "moss";
 
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
-    moss.scale.set(s.scale * MOSS_FOOT.x * 1.04, s.scale * 0.38, s.scale * MOSS_FOOT.z * 1.04);
+    moss.scale.set(s.scale * MOSS_FOOT.x * MOSS_VISUAL, s.scale * 0.38, s.scale * MOSS_FOOT.z * MOSS_VISUAL);
     moss.position.y = 0.04;
     moss.receiveShadow = true;
     moss.castShadow = false;
@@ -212,11 +218,11 @@ export function createMoss(states: MossState[]): THREE.Group {
     const pillows = 2 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {
       const bump = new THREE.Mesh(islandGeometry(seed ^ (17 + p * 13)), mossMat);
-      bump.scale.set(s.scale * randRange(rng, 0.12, 0.2), s.scale * randRange(rng, 0.07, 0.11), s.scale * randRange(rng, 0.1, 0.17));
+      bump.scale.set(s.scale * randRange(rng, 0.1, 0.16), s.scale * randRange(rng, 0.06, 0.1), s.scale * randRange(rng, 0.09, 0.14));
       bump.position.set(
-        randRange(rng, -0.14, 0.14) * s.scale,
-        0.06,
         randRange(rng, -0.1, 0.1) * s.scale,
+        0.06,
+        randRange(rng, -0.08, 0.08) * s.scale,
       );
       bump.rotation.y = rng() * Math.PI;
       bump.receiveShadow = true;

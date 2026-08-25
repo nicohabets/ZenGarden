@@ -86,13 +86,15 @@ export class GrainCloud {
     const carpetCap = Math.floor(this.maxCount * 0.9);
     const spacing = Math.max(0.00105, Math.sqrt((spanX * spanZ) / Math.max(8, carpetCap * 0.82)));
     const px = Math.max(1, viewH);
-    const targetPx = close ? 7 : hud ? 16 : 11;
+    const targetPx = close ? 7 : hud ? 20 : 14;
     const screenWorld = (targetPx * cam.zoom) / px;
-    const pack = close ? 1.78 : hud ? 1.65 : 1.6;
+    const pack = close ? 1.78 : hud ? 1.7 : 1.62;
     const worldSize = Math.max(spacing * pack, screenWorld);
+    // Centers this close would put the grain body on moss.
+    const rim = worldSize * 0.5;
 
     let n = 0;
-    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2);
+    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2, rim);
     n = this.plantCarpet(
       n,
       x0 + spacing * 0.5,
@@ -105,6 +107,7 @@ export class GrainCloud {
       carpetCap,
       0,
       0.16,
+      rim,
     );
     n = this.plantCarpet(
       n,
@@ -118,7 +121,31 @@ export class GrainCloud {
       Math.floor(this.maxCount * 0.95),
       0,
       0.18,
+      rim,
     );
+
+    // Pack the shoreline so a hex skip cannot leave a beige halo.
+    const hugCap = Math.floor(this.maxCount * 0.98);
+    for (const b of blockers) {
+      if (!b.rx || !b.rz || n >= hugCap) continue;
+      const rot = b.rotY ?? 0;
+      const c = Math.cos(rot);
+      const s = Math.sin(rot);
+      const steps = hq ? 96 : 72;
+      for (let i = 0; i < steps && n < hugCap; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        for (const extra of [0.004, 0.014, 0.028, 0.046]) {
+          const lx = ca * (b.rx + rim + extra);
+          const lz = sa * (b.rz + rim + extra);
+          const gx = b.x + lx * c - lz * s;
+          const gz = b.z + lx * s + lz * c;
+          if (blockedPadded(gx, gz, blockers, rim)) continue;
+          n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 80) | 0, (gz * 80) | 0), 0);
+        }
+      }
+    }
 
     const pathStep = hq ? Math.max(spacing * 0.45, 0.0024) : Math.max(spacing * 0.85, 0.014);
     const troughCap = Math.floor(this.maxCount * 0.985);
@@ -132,7 +159,7 @@ export class GrainCloud {
       for (let k = -troughHalf; k <= troughHalf && n < troughCap; k += troughStep) {
         const gx = x + nx * k + (hash2((x * 67 + k * 40) | 0, 3) - 0.5) * spacing * 0.2;
         const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.2;
-        if (blocked(gx, gz, blockers)) continue;
+        if (blockedPadded(gx, gz, blockers, rim)) continue;
         n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 90) | 0, (gz * 90) | 0), 0);
       }
     });
@@ -154,6 +181,7 @@ export class GrainCloud {
     cap: number,
     layer: number,
     jitter: number,
+    rim = 0,
   ): number {
     let row = 0;
     for (let z = z0; z <= z1 && n < cap; z += spacing, row++) {
@@ -165,7 +193,7 @@ export class GrainCloud {
         const gx = x + (hx - 0.5) * spacing * jitter;
         const gz = z + (hz - 0.5) * spacing * jitter;
         if (gx < x0 - spacing || gx > x1 + spacing || gz < z0 - spacing || gz > z1 + spacing) continue;
-        if (blocked(gx, gz, blockers)) continue;
+        if (blockedPadded(gx, gz, blockers, rim)) continue;
         n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hx, layer);
       }
     }
@@ -184,9 +212,9 @@ export class GrainCloud {
 
   private writeInstances(worldSize: number, blockers: Blocker[]): void {
     const n = this.count;
-    // Only hide grain *centers* that landed on moss. A body-pad here
-    // opened a beige shoreline of scene background.
-    const hide = 0;
+    // Hide centers that would put a grain body on the mound.
+    // Visible moss is larger than the keep-out, so this is not a halo.
+    const hide = worldSize * 0.5;
     for (let i = 0; i < n; i++) {
       const seed = this.seeds[i];
       const h = this.hs[i];
@@ -294,10 +322,6 @@ function slantBounds(cam: CameraRig): { x0: number; z0: number; x1: number; z1: 
   }
   const pad = Math.max(0.22, cam.zoom * 0.45);
   return { x0: x0 - pad, z0: z0 - pad, x1: x1 + pad, z1: z1 + pad };
-}
-
-function blocked(x: number, z: number, blockers: Blocker[]): boolean {
-  return blockedPadded(x, z, blockers, 0);
 }
 
 function blockedPadded(x: number, z: number, blockers: Blocker[], pad: number): boolean {
