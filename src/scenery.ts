@@ -121,8 +121,9 @@ export function createFrame(): THREE.Group {
 }
 
 function islandGeometry(seed: number): THREE.BufferGeometry {
-  // Closed ellipsoid. Yanking a sphere skirt open showed a bright
-  // interior and grit underneath; that is the HUD clip.
+  // Closed gumdrop: dome crown, vertical wall through the grit plane,
+  // flat bottom below the court. A tapered sphere lip let the HUD see
+  // beige under the equator — the shoreline halo.
   const geo = new THREE.SphereGeometry(1, 36, 22);
   geo.rotateX(0.9);
   const rng = mulberry32(seed);
@@ -139,12 +140,17 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
       0.05 * Math.cos(v.z * 2.9 + seed * 0.7) +
       0.03 * (rng() - 0.5);
     v.addScaledVector(n, wobble);
-    v.y = v.y * 0.44 + 0.1;
+    v.y = v.y * 0.44 + 0.12;
     const nxz = Math.hypot(v.x, v.z) || 1;
-    // Fill the equator so HUD cannot see beige through a dent.
-    if (Math.abs(n.y) < 0.55) {
-      v.x /= nxz;
-      v.z /= nxz;
+    if (v.y < 0.26) {
+      if (nxz > 0.08) {
+        v.x /= nxz;
+        v.z /= nxz;
+      } else {
+        v.x = 0;
+        v.z = 0;
+      }
+      if (v.y < 0.04) v.y = -0.32;
     } else if (nxz > 1) {
       v.x /= nxz;
       v.z /= nxz;
