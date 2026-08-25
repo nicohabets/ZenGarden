@@ -91,10 +91,10 @@ export class GrainCloud {
     const screenWorld = (targetPx * cam.zoom) / px;
     const pack = close ? 1.78 : hud ? 1.7 : 1.62;
     const worldSize = Math.max(spacing * pack, screenWorld);
-    // Hard mask: grain centers never on the visible mound. A body-radius
-    // keep-out here was the beige HUD halo — moss hid the inner half of
-    // each HUD grain and the scene background showed through the seam.
-    const mossPad = 0;
+    // Hard mask: centers stay a body-radius off the visible wall so a
+    // HUD grain cannot overlap the crown in screen space. The mound
+    // wall is vertical through the grit, so this pad is not a beige gap.
+    const mossPad = worldSize * 0.55;
     const otherPad = worldSize * 0.5;
 
     let n = 0;
@@ -143,8 +143,8 @@ export class GrainCloud {
         const ca = Math.cos(a);
         const sa = Math.sin(a);
         for (const extra of [0.002, 0.008, 0.016, 0.028, 0.044]) {
-          const lx = ca * (b.rx + extra);
-          const lz = sa * (b.rz + extra);
+          const lx = ca * (b.rx + mossPad + extra);
+          const lz = sa * (b.rz + mossPad + extra);
           const gx = b.x + lx * c - lz * s;
           const gz = b.z + lx * s + lz * c;
           if (blockedAt(gx, gz, blockers, mossPad, otherPad)) continue;
@@ -219,13 +219,14 @@ export class GrainCloud {
 
   private writeInstances(worldSize: number, blockers: Blocker[]): void {
     const n = this.count;
+    const mossPad = worldSize * 0.55;
     const otherPad = worldSize * 0.5;
     for (let i = 0; i < n; i++) {
       const seed = this.seeds[i];
       const h = this.hs[i];
       const layer = this.layers[i];
       // Hard mask: grain centers never on the mound.
-      if (blockedAt(this.xs[i], this.zs[i], blockers, 0, otherPad)) {
+      if (blockedAt(this.xs[i], this.zs[i], blockers, mossPad, otherPad)) {
         _dummy.position.set(0, -4, 0);
         _dummy.scale.setScalar(0);
         _dummy.updateMatrix();
