@@ -18,6 +18,7 @@ import {
   createMoss,
   MOSS_FOOT,
   MOSS_GRAIN_PAD,
+  MOSS_VISUAL,
   scatterGravel,
   updateLanterns,
   updateWater,
@@ -518,8 +519,8 @@ export class ZenGarden {
   }
 
   /**
-   * Grain keep-out. The mound itself is larger (`MOSS_VISUAL`) so grit
-   * bodies never sit on moss and the shoreline is not a beige gap.
+   * Grain keep-out is the visible mound. Centers never sit on moss;
+   * grit is packed against that opaque edge so no beige shoreline shows.
    */
   private grainBlockers(): Blocker[] {
     const list: Blocker[] = [
@@ -532,9 +533,9 @@ export class ZenGarden {
       list.push({
         x: m.x,
         z: m.z,
-        r: m.scale * MOSS_FOOT.x + MOSS_GRAIN_PAD,
-        rx: m.scale * MOSS_FOOT.x + MOSS_GRAIN_PAD,
-        rz: m.scale * MOSS_FOOT.z + MOSS_GRAIN_PAD,
+        r: m.scale * MOSS_FOOT.x * MOSS_VISUAL + MOSS_GRAIN_PAD,
+        rx: m.scale * MOSS_FOOT.x * MOSS_VISUAL + MOSS_GRAIN_PAD,
+        rz: m.scale * MOSS_FOOT.z * MOSS_VISUAL + MOSS_GRAIN_PAD,
         rotY: m.rotY,
       });
     }

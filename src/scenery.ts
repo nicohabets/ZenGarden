@@ -27,12 +27,12 @@ function clayTexture(): THREE.CanvasTexture {
 
 /**
  * Closed moss mound in units of `moss.scale`. Keep-out is this ellipse.
- * Visible moss is larger (`MOSS_VISUAL`) so it covers grain bodies and
- * any underlay — no beige shoreline, no grit on the crown.
+ * Visible moss is larger (`MOSS_VISUAL`). Grain keep-out uses this same
+ * ellipse so centers never sit on the mound and grit butts the edge.
  */
 export const MOSS_FOOT = { x: 0.60, z: 0.52 } as const;
 export const MOSS_GRAIN_PAD = 0;
-/** Visible mound / keep-out. Must exceed HUD grain radius. */
+/** Visible mound. Grain blockers use this same ellipse. */
 export const MOSS_VISUAL = 1.12;
 
 /** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
@@ -198,6 +198,9 @@ export function createMoss(states: MossState[]): THREE.Group {
     vertexColors: true,
     side: THREE.FrontSide,
     depthWrite: true,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
@@ -210,6 +213,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
     moss.scale.set(s.scale * MOSS_FOOT.x * MOSS_VISUAL, s.scale * 0.38, s.scale * MOSS_FOOT.z * MOSS_VISUAL);
     moss.position.y = 0.04;
+    moss.renderOrder = 2;
     moss.receiveShadow = true;
     moss.castShadow = false;
     moss.userData.kind = "moss";
@@ -225,6 +229,7 @@ export function createMoss(states: MossState[]): THREE.Group {
         randRange(rng, -0.08, 0.08) * s.scale,
       );
       bump.rotation.y = rng() * Math.PI;
+      bump.renderOrder = 2;
       bump.receiveShadow = true;
       bump.userData.kind = "moss";
       island.add(bump);

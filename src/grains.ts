@@ -54,6 +54,7 @@ export class GrainCloud {
     this.mesh.count = 0;
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
+    this.mesh.renderOrder = 0;
     this.mesh.userData.kind = "sand-grains";
   }
 
@@ -90,11 +91,14 @@ export class GrainCloud {
     const screenWorld = (targetPx * cam.zoom) / px;
     const pack = close ? 1.78 : hud ? 1.7 : 1.62;
     const worldSize = Math.max(spacing * pack, screenWorld);
-    // Centers this close would put the grain body on moss.
-    const rim = worldSize * 0.5;
+    // Hard mask: grain centers never on the visible mound. A body-radius
+    // keep-out here was the beige HUD halo — moss hid the inner half of
+    // each HUD grain and the scene background showed through the seam.
+    const mossPad = 0;
+    const otherPad = worldSize * 0.5;
 
     let n = 0;
-    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2, rim);
+    n = this.plantCarpet(n, x0, z0, x1, z1, spacing, sand, blockers, Math.floor(this.maxCount * 0.68), 0, 0.2, mossPad, otherPad);
     n = this.plantCarpet(
       n,
       x0 + spacing * 0.5,
@@ -107,7 +111,8 @@ export class GrainCloud {
       carpetCap,
       0,
       0.16,
-      rim,
+      mossPad,
+      otherPad,
     );
     n = this.plantCarpet(
       n,
@@ -121,7 +126,8 @@ export class GrainCloud {
       Math.floor(this.maxCount * 0.95),
       0,
       0.18,
-      rim,
+      mossPad,
+      otherPad,
     );
 
     // Pack the shoreline so a hex skip cannot leave a beige halo.
@@ -131,17 +137,17 @@ export class GrainCloud {
       const rot = b.rotY ?? 0;
       const c = Math.cos(rot);
       const s = Math.sin(rot);
-      const steps = hq ? 96 : 72;
+      const steps = hq ? 120 : 88;
       for (let i = 0; i < steps && n < hugCap; i++) {
         const a = (i / steps) * Math.PI * 2;
         const ca = Math.cos(a);
         const sa = Math.sin(a);
-        for (const extra of [0.004, 0.014, 0.028, 0.046]) {
-          const lx = ca * (b.rx + rim + extra);
-          const lz = sa * (b.rz + rim + extra);
+        for (const extra of [0.002, 0.008, 0.016, 0.028, 0.044]) {
+          const lx = ca * (b.rx + extra);
+          const lz = sa * (b.rz + extra);
           const gx = b.x + lx * c - lz * s;
           const gz = b.z + lx * s + lz * c;
-          if (blockedPadded(gx, gz, blockers, rim)) continue;
+          if (blockedAt(gx, gz, blockers, mossPad, otherPad)) continue;
           n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 80) | 0, (gz * 80) | 0), 0);
         }
       }
@@ -159,7 +165,7 @@ export class GrainCloud {
       for (let k = -troughHalf; k <= troughHalf && n < troughCap; k += troughStep) {
         const gx = x + nx * k + (hash2((x * 67 + k * 40) | 0, 3) - 0.5) * spacing * 0.2;
         const gz = z + nz * k + (hash2(5, (z * 83 + k * 40) | 0) - 0.5) * spacing * 0.2;
-        if (blockedPadded(gx, gz, blockers, rim)) continue;
+        if (blockedAt(gx, gz, blockers, mossPad, otherPad)) continue;
         n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hash2((gx * 90) | 0, (gz * 90) | 0), 0);
       }
     });
@@ -181,7 +187,8 @@ export class GrainCloud {
     cap: number,
     layer: number,
     jitter: number,
-    rim = 0,
+    mossPad = 0,
+    otherPad = 0,
   ): number {
     let row = 0;
     for (let z = z0; z <= z1 && n < cap; z += spacing, row++) {
@@ -193,7 +200,7 @@ export class GrainCloud {
         const gx = x + (hx - 0.5) * spacing * jitter;
         const gz = z + (hz - 0.5) * spacing * jitter;
         if (gx < x0 - spacing || gx > x1 + spacing || gz < z0 - spacing || gz > z1 + spacing) continue;
-        if (blockedPadded(gx, gz, blockers, rim)) continue;
+        if (blockedAt(gx, gz, blockers, mossPad, otherPad)) continue;
         n = this.pushGrain(n, gx, gz, sand.sampleHeight(gx, gz), hx, layer);
       }
     }
@@ -212,15 +219,13 @@ export class GrainCloud {
 
   private writeInstances(worldSize: number, blockers: Blocker[]): void {
     const n = this.count;
-    // Hide centers that would put a grain body on the mound.
-    // Visible moss is larger than the keep-out, so this is not a halo.
-    const hide = worldSize * 0.5;
+    const otherPad = worldSize * 0.5;
     for (let i = 0; i < n; i++) {
       const seed = this.seeds[i];
       const h = this.hs[i];
       const layer = this.layers[i];
-      // Hard mask: grain bodies never sit on moss.
-      if (blockedPadded(this.xs[i], this.zs[i], blockers, hide)) {
+      // Hard mask: grain centers never on the mound.
+      if (blockedAt(this.xs[i], this.zs[i], blockers, 0, otherPad)) {
         _dummy.position.set(0, -4, 0);
         _dummy.scale.setScalar(0);
         _dummy.updateMatrix();
@@ -231,7 +236,9 @@ export class GrainCloud {
       }
       const floor = h * SAND_HEIGHT_GAIN;
       const lift = Math.max(floor, -0.008);
-      const y = GARDEN.sandY + lift + worldSize * 0.36 + layer * LAYER_H;
+      const shore = onMossShore(this.xs[i], this.zs[i], blockers, worldSize * 0.85);
+      const yLift = shore ? worldSize * 0.22 : worldSize * 0.36;
+      const y = GARDEN.sandY + lift + yLift + layer * LAYER_H;
       const s = worldSize * (0.88 + seed * 0.18);
       _dummy.position.set(this.xs[i], y, this.zs[i]);
       _dummy.rotation.set(seed * 6.2, seed * 8.1, hash2(i + 3, 17) * 6.8);
@@ -239,8 +246,9 @@ export class GrainCloud {
       _dummy.updateMatrix();
       this.mesh.setMatrixAt(i, _dummy.matrix);
       const trough = h < -0.004 ? -0.025 : 0;
+      const dim = shore ? -0.07 : 0;
       const t = seed;
-      _color.setRGB(0.56 + t * 0.28 + trough, 0.52 + t * 0.22 + trough, 0.42 + t * 0.18 + trough);
+      _color.setRGB(0.56 + t * 0.26 + trough + dim, 0.52 + t * 0.2 + trough + dim, 0.42 + t * 0.16 + trough + dim);
       this.mesh.setColorAt(i, _color);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -324,7 +332,7 @@ function slantBounds(cam: CameraRig): { x0: number; z0: number; x1: number; z1: 
   return { x0: x0 - pad, z0: z0 - pad, x1: x1 + pad, z1: z1 + pad };
 }
 
-function blockedPadded(x: number, z: number, blockers: Blocker[], pad: number): boolean {
+function blockedAt(x: number, z: number, blockers: Blocker[], mossPad: number, otherPad: number): boolean {
   for (const b of blockers) {
     const dx = x - b.x;
     const dz = z - b.z;
@@ -334,12 +342,32 @@ function blockedPadded(x: number, z: number, blockers: Blocker[], pad: number): 
       const s = Math.sin(rot);
       const lx = dx * c + dz * s;
       const lz = -dx * s + dz * c;
-      const rx = b.rx + pad;
-      const rz = b.rz + pad;
+      const rx = b.rx + mossPad;
+      const rz = b.rz + mossPad;
       if ((lx * lx) / (rx * rx) + (lz * lz) / (rz * rz) < 1) return true;
-    } else if (dx * dx + dz * dz < (b.r + pad) * (b.r + pad)) {
+    } else if (dx * dx + dz * dz < (b.r + otherPad) * (b.r + otherPad)) {
       return true;
     }
+  }
+  return false;
+}
+
+/** First grit row next to a moss ellipse — dim so it is not a white rim. */
+function onMossShore(x: number, z: number, blockers: Blocker[], band: number): boolean {
+  for (const b of blockers) {
+    if (!b.rx || !b.rz) continue;
+    const dx = x - b.x;
+    const dz = z - b.z;
+    const rot = b.rotY ?? 0;
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    const lx = dx * c + dz * s;
+    const lz = -dx * s + dz * c;
+    const inside = (lx * lx) / (b.rx * b.rx) + (lz * lz) / (b.rz * b.rz) < 1;
+    if (inside) continue;
+    const rx = b.rx + band;
+    const rz = b.rz + band;
+    if ((lx * lx) / (rx * rx) + (lz * lz) / (rz * rz) < 1) return true;
   }
   return false;
 }
