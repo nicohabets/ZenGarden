@@ -143,14 +143,22 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
     v.y = v.y * 0.44 + 0.12;
     const nxz = Math.hypot(v.x, v.z) || 1;
     if (v.y < 0.26) {
-      if (nxz > 0.08) {
+      // Wall at full radius. Do not pinch near-axis crown verts to 0 —
+      // that fanned a white starburst on the HUD mound.
+      if (nxz > 0.12) {
         v.x /= nxz;
         v.z /= nxz;
-      } else {
-        v.x = 0;
-        v.z = 0;
       }
-      if (v.y < 0.04) v.y = -0.32;
+      if (v.y < 0.04) {
+        v.y = -0.32;
+        if (nxz <= 0.12) {
+          v.x = 0;
+          v.z = 0;
+        } else {
+          v.x /= nxz;
+          v.z /= nxz;
+        }
+      }
     } else if (nxz > 1) {
       v.x /= nxz;
       v.z /= nxz;
