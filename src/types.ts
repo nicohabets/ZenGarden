@@ -77,6 +77,10 @@ export interface Blocker {
   x: number;
   z: number;
   r: number;
+  /** Grain-only ellipse so grit stays off moss skirts. Rake still uses `r`. */
+  rx?: number;
+  rz?: number;
+  rotY?: number;
 }
 
 export interface StoneStats {
@@ -131,6 +135,7 @@ export interface ZenGardenAPI {
   getSandVolume(): number;
   settleSand(steps?: number): void;
   getSandTone(): SandTone;
+  getGrainCount(): number;
   getPerf(): PerfStats;
   getMossCount(): number;
   getCamera(): CameraState;

@@ -29,12 +29,18 @@ export function pixelRatioCap(software = false): number {
   return Math.min(dpr, 1.5);
 }
 
+/** Stencil-mask grit off moss. Skip on cheap headless GL; ?hq=1 keeps it. */
+export function wantMossStencil(): boolean {
+  return wantHighQuality() || !isSoftwareGL();
+}
+
 export function shadowsEnabled(software = false): boolean {
   if (software || isMobileGarden() || wantHighQuality()) return false;
   return true;
 }
 
 export function chooseSimGrid(): { w: number; h: number } {
+  if (wantHighQuality()) return { w: 320, h: 188 };
   if (isMobileGarden()) return { w: 128, h: 75 };
   return { w: 160, h: 94 };
 }
@@ -45,5 +51,6 @@ export function chooseDisplayGrid(sim: { w: number; h: number }): { w: number; h
   if (isMobileGarden()) {
     return { w: Math.min(200, Math.round(sim.w * 1.5)), h: Math.min(118, Math.round(sim.h * 1.5)) };
   }
-  return { w: Math.min(320, sim.w * 2), h: Math.min(188, sim.h * 2) };
+  return { w: Math.min(280, sim.w * 2), h: Math.min(164, sim.h * 2) };
 }
+

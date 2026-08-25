@@ -1,7 +1,5 @@
 import * as THREE from "three";
 import { chooseDisplayGrid, chooseSimGrid } from "./device";
-import { createGravelAtlas } from "./gravelAtlas";
-import { applyGravelShader } from "./gravelShader";
 import { mulberry32 } from "./rng";
 import { GARDEN, type Blocker, type SandTone } from "./types";
 
@@ -18,7 +16,15 @@ const TINE_GAP = 0.114;
 const TROUGH_SIGMA = 0.036;
 const RIDGE_OFF = 0.056;
 const RIDGE_SIGMA = 0.03;
-const RAKE_DEPTH = 0.042;
+const RAKE_DEPTH = 0.05;
+
+/**
+ * Gentle bed only. Steep displacement turned the close-up into a sawtooth
+ * wall; groove relief is piled grit, not the height-field mesh.
+ */
+export const SAND_HEIGHT_GAIN = 0.48;
+export const SAND_DISP_SCALE = H_RANGE * SAND_HEIGHT_GAIN;
+export const SAND_DISP_BIAS = H_MIN * SAND_HEIGHT_GAIN;
 /** Legacy sample space so groove APIs stay in the old 1024-wide units. */
 const SAMPLE_SCALE = 2;
 const LEGACY_W = 1024;
@@ -38,9 +44,25 @@ interface Rect {
   j1: number;
 }
 
+interface RakeMark {
+  kind: "seg" | "arc";
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  cx: number;
+  cz: number;
+  r: number;
+  a0: number;
+  a1: number;
+  depth: number;
+  multi: boolean;
+}
+
 /**
- * Volumetric gravel court: a CPU height field with conservation rake,
- * angle-of-repose slump, and a GPU-displaced mesh shaded as pale pebbles.
+ * Court mass: a CPU height field with conservation rake and angle-of-repose
+ * slump. The mesh is the grit-colored bed; visible sand is that bed plus
+ * a packed cloud of small rounded grains.
  */
 export class SandField {
   readonly mesh: THREE.Mesh;
@@ -61,6 +83,7 @@ export class SandField {
   private slumpRow = 0;
   private packNeeded = false;
   private occupantsDirty = false;
+  private readonly marks: RakeMark[] = [];
   private readonly cellX: number;
   private readonly cellZ: number;
   private readonly cellMin: number;
@@ -92,28 +115,24 @@ export class SandField {
     this.texture.needsUpdate = true;
     this.texture.flipY = true;
 
-    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth, display.w - 1, display.h - 1);
+    // Pick plane only. A lit Lambert bed reads as a tan slab / island halo.
+    // The visible court is the packed grain cloud, all the way to the moss.
+    const geo = new THREE.PlaneGeometry(GARDEN.width, GARDEN.depth);
     geo.rotateX(-Math.PI / 2);
-
-    const atlas = createGravelAtlas();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      map: atlas,
-      bumpMap: atlas,
-      bumpScale: 0.22,
-      roughness: 0.84,
-      metalness: 0,
-      displacementMap: this.texture,
-      displacementScale: H_RANGE,
-      displacementBias: H_MIN,
-      envMapIntensity: 0,
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xc8bca8,
+      transparent: true,
+      opacity: 0,
     });
-    applyGravelShader(mat, this.texture, GARDEN.width, GARDEN.depth, H_RANGE);
+    mat.colorWrite = false;
+    mat.depthWrite = false;
+    mat.depthTest = false;
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.position.y = GARDEN.sandY;
-    this.mesh.receiveShadow = true;
+    this.mesh.receiveShadow = false;
     this.mesh.castShadow = false;
+    this.mesh.renderOrder = -2;
     this.mesh.userData.kind = "sand";
 
     this.markAllDirty();
@@ -133,6 +152,7 @@ export class SandField {
       this.dirX[i] = 0;
       this.dirZ[i] = 0;
     }
+    this.marks.length = 0;
     this.markAllDirty();
     this.queueSlump(3);
   }
@@ -148,6 +168,134 @@ export class SandField {
     const u = x / GARDEN.width + 0.5;
     const v = z / GARDEN.depth + 0.5;
     return this.sampleBilinear(u * (this.simW - 1), v * (this.simH - 1));
+  }
+
+  sampleDir(x: number, z: number): { x: number; z: number } {
+    const i = this.worldToI(x);
+    const j = this.worldToJ(z);
+    return { x: this.dirX[j * this.simW + i], z: this.dirZ[j * this.simW + i] };
+  }
+
+  /** Sharp rake profile at grain scale, before slump smooths the mass field. */
+  sampleVisual(x: number, z: number): number {
+    let mark = 0;
+    for (let i = 0; i < this.marks.length; i++) mark += markDelta(this.marks[i], x, z);
+    if (Math.abs(mark) < 1e-4) return this.sampleHeight(x, z);
+    return mark;
+  }
+
+  /** Walk tine crests so grit can pile along the same lines the rake carved. */
+  forEachBank(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    step: number,
+    fn: (x: number, z: number, alongX: number, alongZ: number, h: number) => void,
+  ): void {
+    const ds = Math.max(0.016, step);
+    for (let i = 0; i < this.marks.length; i++) {
+      const m = this.marks[i];
+      const offs = ridgeOffsets(m.multi);
+      const h = m.depth * 0.62;
+      if (m.kind === "seg") {
+        const dx = m.bx - m.ax;
+        const dz = m.bz - m.az;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.04) continue;
+        const tx = dx / len;
+        const tz = dz / len;
+        const nx = -tz;
+        const nz = tx;
+        for (let t = 0; t <= len; t += ds) {
+          const px = m.ax + tx * t;
+          const pz = m.az + tz * t;
+          for (let k = 0; k < offs.length; k++) {
+            const x = px + nx * offs[k];
+            const z = pz + nz * offs[k];
+            if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+            fn(x, z, tx, tz, h);
+          }
+        }
+        continue;
+      }
+      let sweep = m.a1 - m.a0;
+      while (sweep > Math.PI * 2) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI * 2) sweep += Math.PI * 2;
+      const da = ds / Math.max(0.12, m.r);
+      const dir = sweep >= 0 ? 1 : -1;
+      for (let a = 0; a <= Math.abs(sweep) + 1e-6; a += da) {
+        const ang = m.a0 + dir * a;
+        const ca = Math.cos(ang);
+        const sa = Math.sin(ang);
+        const tx = -sa;
+        const tz = ca;
+        for (let k = 0; k < offs.length; k++) {
+          const r = m.r + offs[k];
+          const x = m.cx + ca * r;
+          const z = m.cz + sa * r;
+          if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+          fn(x, z, tx, tz, h);
+        }
+      }
+    }
+  }
+
+  /** Walk tine bottoms so the trough stays packed grit, not a bare slab. */
+  forEachTrough(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    step: number,
+    fn: (x: number, z: number, alongX: number, alongZ: number, h: number) => void,
+  ): void {
+    const ds = Math.max(0.012, step);
+    for (let i = 0; i < this.marks.length; i++) {
+      const m = this.marks[i];
+      const offs = troughOffsets(m.multi);
+      const h = -m.depth * 0.85;
+      if (m.kind === "seg") {
+        const dx = m.bx - m.ax;
+        const dz = m.bz - m.az;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.04) continue;
+        const tx = dx / len;
+        const tz = dz / len;
+        const nx = -tz;
+        const nz = tx;
+        for (let t = 0; t <= len; t += ds) {
+          const px = m.ax + tx * t;
+          const pz = m.az + tz * t;
+          for (let k = 0; k < offs.length; k++) {
+            const x = px + nx * offs[k];
+            const z = pz + nz * offs[k];
+            if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+            fn(x, z, tx, tz, h);
+          }
+        }
+        continue;
+      }
+      let sweep = m.a1 - m.a0;
+      while (sweep > Math.PI * 2) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI * 2) sweep += Math.PI * 2;
+      const da = ds / Math.max(0.12, m.r);
+      const dir = sweep >= 0 ? 1 : -1;
+      for (let a = 0; a <= Math.abs(sweep) + 1e-6; a += da) {
+        const ang = m.a0 + dir * a;
+        const ca = Math.cos(ang);
+        const sa = Math.sin(ang);
+        const tx = -sa;
+        const tz = ca;
+        for (let k = 0; k < offs.length; k++) {
+          const r = m.r + offs[k];
+          const x = m.cx + ca * r;
+          const z = m.cz + sa * r;
+          if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+          fn(x, z, tx, tz, h);
+        }
+      }
+    }
   }
 
   getSandVolume(): number {
@@ -220,13 +368,30 @@ export class SandField {
       for (let i = i0; i <= i1; i++) {
         const idx = j * this.simW + i;
         const wobble = 1 + 0.07 * Math.sin(i * 0.37 + z * 4.1);
-        this.height[idx] += delta * wobble;
+        const jag = 0.84 + hash2(i * 17, j * 29) * 0.34;
+        this.height[idx] += delta * wobble * jag + (hash2(i + 2, j + 8) - 0.5) * 0.0024;
         this.dirX[idx] = 1;
         this.dirZ[idx] = 0;
       }
     }
     this.expandDirty(i0, j0, i1, j1);
     this.queueSlump(4);
+    for (const gz of grooves) {
+      this.marks.push({
+        kind: "seg",
+        ax: x0,
+        az: gz,
+        bx: x1,
+        bz: gz,
+        cx: 0,
+        cz: 0,
+        r: 0,
+        a0: 0,
+        a1: 0,
+        depth,
+        multi: false,
+      });
+    }
   }
 
   embedOccupants(items: Occupant[]): void {
@@ -409,10 +574,23 @@ export class SandField {
     throw new Error("sand image");
   }
 
-  flush(): void {
-    if (!this.packNeeded) return;
+  flush(): boolean {
+    if (!this.packNeeded) return false;
     this.packTexture();
     this.packNeeded = false;
+    return true;
+  }
+
+  dirtyWorld(): { x0: number; z0: number; x1: number; z1: number } | "all" | null {
+    if (!this.dirty) return null;
+    const full = this.dirty.i0 <= 2 && this.dirty.j0 <= 2 && this.dirty.i1 >= this.simW - 3 && this.dirty.j1 >= this.simH - 3;
+    if (full) return "all";
+    return {
+      x0: this.iToWorld(this.dirty.i0),
+      z0: this.jToWorld(this.dirty.j0),
+      x1: this.iToWorld(this.dirty.i1),
+      z1: this.jToWorld(this.dirty.j1),
+    };
   }
 
   private importPacked(payload: string): boolean {
@@ -510,15 +688,31 @@ export class SandField {
         const px = ax + tx * t;
         const pz = az + tz * t;
         const across = (x - px) * nx + (z - pz) * nz;
-        const delta = tineProfile(across) * depth;
+        const jag = 0.8 + hash2(i * 19 + 4, j * 23 + 9) * 0.42;
+        const wobble = (hash2(i * 11, j * 13) - 0.5) * 0.014;
+        const delta = tineProfile(across + wobble) * depth * jag;
         if (Math.abs(delta) < 1e-5) continue;
         const idx = j * this.simW + i;
-        this.height[idx] += delta;
+        this.height[idx] += delta + (hash2(i + 3, j + 5) - 0.5) * 0.0028;
         this.dirX[idx] = this.dirX[idx] * 0.35 + tx * 0.65;
         this.dirZ[idx] = this.dirZ[idx] * 0.35 + tz * 0.65;
       }
     }
     this.expandDirty(i0, j0, i1, j1);
+    this.marks.push({
+      kind: "seg",
+      ax,
+      az,
+      bx,
+      bz,
+      cx: 0,
+      cz: 0,
+      r: 0,
+      a0: 0,
+      a1: 0,
+      depth,
+      multi: true,
+    });
   }
 
   private carveArc(
@@ -554,10 +748,12 @@ export class SandField {
         if (Math.abs(across) > pad) continue;
         let ang = Math.atan2(dz, dx);
         if (!angleInSweep(ang, a0, sweep)) continue;
-        const delta = (single ? singleTine(across) : tineProfile(across)) * depth;
+        const jag = 0.8 + hash2(i * 19 + 4, j * 23 + 9) * 0.42;
+        const wobble = (hash2(i * 11, j * 13) - 0.5) * 0.014;
+        const delta = (single ? singleTine(across + wobble) : tineProfile(across + wobble)) * depth * jag;
         if (Math.abs(delta) < 1e-5) continue;
         const idx = j * this.simW + i;
-        this.height[idx] += delta;
+        this.height[idx] += delta + (hash2(i + 3, j + 5) - 0.5) * 0.0028;
         const tx = -dz / (dist || 1);
         const tz = dx / (dist || 1);
         this.dirX[idx] = this.dirX[idx] * 0.35 + tx * 0.65;
@@ -565,6 +761,20 @@ export class SandField {
       }
     }
     this.expandDirty(i0, j0, i1, j1);
+    this.marks.push({
+      kind: "arc",
+      ax: 0,
+      az: 0,
+      bx: 0,
+      bz: 0,
+      cx,
+      cz,
+      r: radius,
+      a0,
+      a1,
+      depth,
+      multi: !single,
+    });
   }
 
   private slumpRegion(rect: Rect, iterations: number): void {
@@ -632,8 +842,6 @@ export class SandField {
         let h = this.sampleBilinear(fi, fj);
         const ix = this.clampI(Math.floor(fi));
         const jz = this.clampJ(Math.floor(fj));
-        const grain = hash2(i * 13 + 7, j * 17 + 3) * 0.0084 - 0.0042;
-        h += grain;
         const dx = this.sampleDirX(ix, jz);
         const dz = this.sampleDirZ(ix, jz);
         const o = (j * dispW + i) * 4;
@@ -736,6 +944,51 @@ function singleTine(across: number): number {
     Math.exp(-0.5 * ((across - RIDGE_OFF) / RIDGE_SIGMA) ** 2) +
     Math.exp(-0.5 * ((across + RIDGE_OFF) / RIDGE_SIGMA) ** 2);
   return -trough + (TROUGH_SIGMA / (2 * RIDGE_SIGMA)) * ridge;
+}
+
+function markDelta(mark: RakeMark, x: number, z: number): number {
+  if (mark.kind === "seg") {
+    const dx = mark.bx - mark.ax;
+    const dz = mark.bz - mark.az;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return 0;
+    const tx = dx / len;
+    const tz = dz / len;
+    const t = (x - mark.ax) * tx + (z - mark.az) * tz;
+    if (t < -0.02 || t > len + 0.02) return 0;
+    const across = (x - mark.ax) * -tz + (z - mark.az) * tx;
+    const pad = mark.multi ? TINES * TINE_GAP * 0.5 + RIDGE_OFF + 0.05 : RIDGE_OFF + TROUGH_SIGMA * 3;
+    if (Math.abs(across) > pad) return 0;
+    return (mark.multi ? tineProfile(across) : singleTine(across)) * mark.depth;
+  }
+  const dx = x - mark.cx;
+  const dz = z - mark.cz;
+  const dist = Math.hypot(dx, dz);
+  const across = dist - mark.r;
+  const pad = mark.multi ? TINES * TINE_GAP * 0.5 + RIDGE_OFF + 0.05 : RIDGE_OFF + TROUGH_SIGMA * 3;
+  if (Math.abs(across) > pad) return 0;
+  const sweep = mark.a1 - mark.a0;
+  if (!angleInSweep(Math.atan2(dz, dx), mark.a0, sweep)) return 0;
+  return (mark.multi ? tineProfile(across) : singleTine(across)) * mark.depth;
+}
+
+function ridgeOffsets(multi: boolean): number[] {
+  if (!multi) return [RIDGE_OFF, -RIDGE_OFF];
+  const out: number[] = [];
+  const center = (TINES - 1) / 2;
+  for (let t = 0; t < TINES; t++) {
+    const mid = (t - center) * TINE_GAP;
+    out.push(mid + RIDGE_OFF, mid - RIDGE_OFF);
+  }
+  return out;
+}
+
+function troughOffsets(multi: boolean): number[] {
+  if (!multi) return [0];
+  const out: number[] = [];
+  const center = (TINES - 1) / 2;
+  for (let t = 0; t < TINES; t++) out.push((t - center) * TINE_GAP);
+  return out;
 }
 
 function tineProfile(across: number): number {

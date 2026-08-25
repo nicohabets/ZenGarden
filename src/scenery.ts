@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { wantMossStencil } from "./device";
 import { mulberry32, randRange } from "./rng";
 import { GARDEN, type BasinState, type LanternState, type MossState } from "./types";
 
@@ -25,31 +26,70 @@ function clayTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-export function createGround(): THREE.Mesh {
+/**
+ * Closed moss mound in units of `moss.scale`. Keep-out is this ellipse.
+ * Visible moss is larger (`MOSS_VISUAL`). Grain keep-out uses this same
+ * ellipse so centers never sit on the mound and grit butts the edge.
+ */
+export const MOSS_FOOT = { x: 0.60, z: 0.52 } as const;
+export const MOSS_GRAIN_PAD = 0;
+/** Visible mound. Grain blockers use this same ellipse. */
+export const MOSS_VISUAL = 1.12;
+
+/** Dirt beyond the court only. A full plane here was the grey-tan moss halo. */
+export function createGround(): THREE.Group {
+  const group = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({
     color: 0xb8b0a4,
     roughness: 1,
     metalness: 0,
   });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(42, 36), mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = -0.1;
-  mesh.receiveShadow = true;
-  return mesh;
+  const y = -0.12;
+  const w = GARDEN.width;
+  const d = GARDEN.depth;
+  const outer = 16;
+  const strips: Array<[number, number, number, number]> = [
+    [w + outer * 2, outer, 0, d / 2 + outer / 2],
+    [w + outer * 2, outer, 0, -d / 2 - outer / 2],
+    [outer, d, w / 2 + outer / 2, 0],
+    [outer, d, -w / 2 - outer / 2, 0],
+  ];
+  for (const [bw, bd, x, z] of strips) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(bw, bd), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, y, z);
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
 }
 
-/** Pale gravel skirt so a low camera never falls into a black void. */
-export function createApron(): THREE.Mesh {
+/** Pale skirt outside the court so a low camera never falls into a void. */
+export function createApron(): THREE.Group {
+  const group = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({
     color: 0xe6dfd2,
     roughness: 0.96,
     metalness: 0,
   });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(22, 15), mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = GARDEN.sandY - 0.035;
-  mesh.receiveShadow = true;
-  return mesh;
+  const y = GARDEN.sandY - 0.035;
+  const w = GARDEN.width;
+  const d = GARDEN.depth;
+  const rim = 4;
+  const strips: Array<[number, number, number, number]> = [
+    [w + rim * 2, rim, 0, d / 2 + rim / 2],
+    [w + rim * 2, rim, 0, -d / 2 - rim / 2],
+    [rim, d, w / 2 + rim / 2, 0],
+    [rim, d, -w / 2 - rim / 2, 0],
+  ];
+  for (const [bw, bd, x, z] of strips) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(bw, bd), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, y, z);
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
 }
 
 export function createFrame(): THREE.Group {
@@ -82,29 +122,50 @@ export function createFrame(): THREE.Group {
 }
 
 function islandGeometry(seed: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 32, 20);
+  // Closed gumdrop: dome crown, vertical wall through the grit plane,
+  // flat bottom below the court. A tapered sphere lip let the HUD see
+  // beige under the equator — the shoreline halo.
+  const geo = new THREE.SphereGeometry(1, 36, 22);
+  geo.rotateX(0.9);
   const rng = mulberry32(seed);
   const pos = geo.attributes.position;
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
   const v = new THREE.Vector3();
-  const earth = new THREE.Color(0x8a744c);
-  const moss = new THREE.Color(0x6a8a48);
-  const mossLite = new THREE.Color(0x8aaa5c);
+  const moss = new THREE.Color(0x5a7840);
+  const mossLite = new THREE.Color(0x65844a);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const n = v.clone().normalize();
     const wobble =
-      0.18 * Math.sin(v.x * 2.2 + seed) +
-      0.14 * Math.cos(v.z * 2.8 + seed * 0.7) +
-      0.08 * Math.sin(v.x * 4.8 + v.z * 4.1 + seed) +
-      0.05 * (rng() - 0.5);
+      0.07 * Math.sin(v.x * 2.4 + seed) +
+      0.05 * Math.cos(v.z * 2.9 + seed * 0.7) +
+      0.03 * (rng() - 0.5);
     v.addScaledVector(n, wobble);
-    v.x *= 1.04 + 0.07 * Math.sin(seed + v.z * 2.0);
-    v.z *= 0.9 + 0.08 * Math.cos(seed * 0.4 + v.x * 1.6);
-    v.y = v.y * 0.38 + 0.2;
-    if (v.y < 0.04) v.y = 0.04 + rng() * 0.03;
+    v.y = v.y * 0.44 + 0.12;
+    const nxz = Math.hypot(v.x, v.z) || 1;
+    if (v.y < 0.26) {
+      // Wall at full radius. Do not pinch near-axis crown verts to 0 —
+      // that fanned a white starburst on the HUD mound.
+      if (nxz > 0.12) {
+        v.x /= nxz;
+        v.z /= nxz;
+      }
+      if (v.y < 0.04) {
+        v.y = -0.32;
+        if (nxz <= 0.12) {
+          v.x = 0;
+          v.z = 0;
+        } else {
+          v.x /= nxz;
+          v.z /= nxz;
+        }
+      }
+    } else if (nxz > 1) {
+      v.x /= nxz;
+      v.z /= nxz;
+    }
     pos.setXYZ(i, v.x, v.y, v.z);
-    const c = v.y < 0.1 ? earth.clone().lerp(moss, 0.55) : moss.clone().lerp(mossLite, rng() * 0.55);
+    const c = moss.clone().lerp(mossLite, rng() * 0.4);
     color.setXYZ(i, c.r, c.g, c.b);
   }
   geo.setAttribute("color", color);
@@ -124,7 +185,7 @@ function mossTexture(): THREE.CanvasTexture {
   for (let i = 0; i < 2200; i++) {
     const x = (i * 29 + 3) % size;
     const y = (i * 47 + 11) % size;
-    ctx.fillStyle = i % 5 === 0 ? "#3e5230" : i % 3 === 0 ? "#7a9258" : "#4e6838";
+    ctx.fillStyle = i % 5 === 0 ? "#3e5230" : i % 3 === 0 ? "#5a7044" : "#4e6838";
     ctx.fillRect(x, y, 1 + (i % 2), 1);
   }
   const tex = new THREE.CanvasTexture(canvas);
@@ -141,39 +202,38 @@ let mossMap: THREE.CanvasTexture | null = null;
 export function createMoss(states: MossState[]): THREE.Group {
   const group = new THREE.Group();
   mossMap ??= mossTexture();
-  const earth = new THREE.MeshStandardMaterial({
-    color: 0x8a7248,
-    roughness: 0.96,
-    metalness: 0,
-  });
+  const stencil = wantMossStencil();
   const mossMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: mossMap,
-    roughness: 0.94,
+    roughness: 1,
     metalness: 0,
-    emissive: 0x2a3a18,
-    emissiveIntensity: 0.32,
+    envMapIntensity: 0,
+    emissive: 0x1c2a12,
+    emissiveIntensity: 0.24,
     vertexColors: true,
+    side: THREE.FrontSide,
+    depthWrite: true,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+    stencilWrite: stencil,
+    stencilRef: stencil ? 1 : 0,
+    stencilZPass: stencil ? THREE.ReplaceStencilOp : THREE.KeepStencilOp,
+    stencilFunc: THREE.AlwaysStencilFunc,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
     const rng = mulberry32(seed);
     const island = new THREE.Group();
-    island.position.set(s.x, GARDEN.sandY - 0.06, s.z);
+    island.position.set(s.x, GARDEN.sandY - 0.04, s.z);
     island.rotation.y = s.rotY;
     island.userData.kind = "moss";
 
-    const soil = new THREE.Mesh(islandGeometry(seed ^ 0x51), earth);
-    soil.scale.set(s.scale * 0.62, s.scale * 0.22, s.scale * 0.54);
-    soil.position.y = -0.01;
-    soil.receiveShadow = true;
-    soil.castShadow = false;
-    soil.userData.kind = "moss";
-    island.add(soil);
-
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
-    moss.scale.set(s.scale * 0.55, s.scale * 0.32, s.scale * 0.48);
-    moss.position.y = 0.01;
+    moss.scale.set(s.scale * MOSS_FOOT.x * MOSS_VISUAL, s.scale * 0.38, s.scale * MOSS_FOOT.z * MOSS_VISUAL);
+    moss.position.y = 0.04;
+    moss.renderOrder = 1;
     moss.receiveShadow = true;
     moss.castShadow = false;
     moss.userData.kind = "moss";
@@ -182,13 +242,14 @@ export function createMoss(states: MossState[]): THREE.Group {
     const pillows = 2 + ((seed >> 3) % 2);
     for (let p = 0; p < pillows; p++) {
       const bump = new THREE.Mesh(islandGeometry(seed ^ (17 + p * 13)), mossMat);
-      bump.scale.set(s.scale * randRange(rng, 0.16, 0.28), s.scale * randRange(rng, 0.08, 0.14), s.scale * randRange(rng, 0.14, 0.24));
+      bump.scale.set(s.scale * randRange(rng, 0.1, 0.16), s.scale * randRange(rng, 0.06, 0.1), s.scale * randRange(rng, 0.09, 0.14));
       bump.position.set(
-        randRange(rng, -0.28, 0.28) * s.scale,
-        0.03,
-        randRange(rng, -0.22, 0.22) * s.scale,
+        randRange(rng, -0.1, 0.1) * s.scale,
+        0.06,
+        randRange(rng, -0.08, 0.08) * s.scale,
       );
       bump.rotation.y = rng() * Math.PI;
+      bump.renderOrder = 1;
       bump.receiveShadow = true;
       bump.userData.kind = "moss";
       island.add(bump);

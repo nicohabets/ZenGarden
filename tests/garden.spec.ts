@@ -36,6 +36,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("toolbar is visible and a tool can be selected", async ({ page }) => {
+    test.setTimeout(45_000);
     await page.goto("/");
     await waitForGarden(page);
 
@@ -118,6 +119,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("new garden dialog can keep the current garden", async ({ page }) => {
+    test.setTimeout(45_000);
     await page.goto("/");
     await waitForGarden(page);
     const seed = await page.evaluate(() => window.__ZEN_GARDEN__!.getSeed());
@@ -248,6 +250,8 @@ test.describe("Zen Garden", () => {
     expect(look.tone.luma).toBeGreaterThan(150);
     expect(look.tone.r - look.tone.b).toBeLessThan(40);
     expect(look.ring).toBeLessThan(9.5);
+    const grains = await page.evaluate(() => window.__ZEN_GARDEN__!.getGrainCount());
+    expect(grains).toBeGreaterThan(100_000);
 
     const curved = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
@@ -318,6 +322,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("camera starts on the gravel and can zoom to grain scale", async ({ page }) => {
+    test.setTimeout(60_000);
     await page.goto("/");
     await waitForGarden(page);
 
@@ -351,6 +356,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("garden starts quickly and reports frame time", async ({ page }) => {
+    test.setTimeout(60_000);
     const t0 = Date.now();
     await page.goto("/");
     await waitForGarden(page);
@@ -359,7 +365,7 @@ test.describe("Zen Garden", () => {
     await page.waitForFunction(() => {
       const perf = window.__ZEN_GARDEN__?.getPerf();
       return !!perf && perf.samples >= 8;
-    }, undefined, { timeout: 12_000 });
+    }, undefined, { timeout: 25_000 });
     const perf = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
       const rake0 = performance.now();

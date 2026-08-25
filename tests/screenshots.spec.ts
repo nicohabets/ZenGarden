@@ -1,7 +1,7 @@
 import { test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
-const outDir = "docs/screenshots";
+const outDir = process.env.SHOT_DIR || "docs/screenshots";
 /** Known layout: Ryoan-ji 15-stone groups on a pale gravel court. */
 const SHOT_SEED = 3596739839;
 
@@ -9,7 +9,7 @@ test.describe("screenshots", () => {
   test.skip(!process.env.SHOTS, "set SHOTS=1 to capture PR images");
 
   test("nose-on gravel, island rings, and mobile close", async ({ page }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(600_000);
     mkdirSync(outDir, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/?hq=1");
@@ -31,45 +31,60 @@ test.describe("screenshots", () => {
       }
       api.rakeStroke(ring);
       api.rakeFromTo(-5.1, 1.88, 4.6, 1.88);
-      api.settleSand(24);
+      api.settleSand(3);
       return { cx, cz };
     });
     await page.waitForTimeout(400);
 
     await page.evaluate(() => {
+      // Packed-court close-up on the same clear rake as mobile. A
+      // grazing look-along parked the camera on island-1 (black void).
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.88,
-        elevation: 0.34,
-        zoom: 0.56,
-        tx: -3.15,
-        tz: 2.05,
+        azimuth: 1.35,
+        elevation: 0.36,
+        zoom: 0.42,
+        tx: -2.45,
+        tz: 1.88,
       });
     });
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(350);
     await page.screenshot({ path: `${outDir}/gravel-close.png`, animations: "disabled" });
 
     await page.evaluate((look) => {
       window.__ZEN_GARDEN__!.setCamera({
         azimuth: 0.52,
-        elevation: 0.55,
-        zoom: 1.85,
+        elevation: 0.48,
+        zoom: 1.7,
         tx: look.cx + 0.05,
         tz: look.cz + 0.22,
       });
     }, island);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(250);
     await page.screenshot({ path: `${outDir}/island-rings.png`, animations: "disabled" });
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.evaluate((look) => {
+    await page.evaluate(() => {
       window.__ZEN_GARDEN__!.setCamera({
-        azimuth: 0.56,
-        elevation: 0.52,
-        zoom: 1.72,
-        tx: look.cx + 0.04,
-        tz: look.cz + 0.2,
+        azimuth: 0.78,
+        elevation: 0.5,
+        zoom: 3.7,
+        tx: 0.15,
+        tz: 0.12,
       });
-    }, island);
+    });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${outDir}/desktop-hud.png`, animations: "disabled" });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    // Packed court on the long rake, clear of every moss island.
+    await page.evaluate(() => {
+      window.__ZEN_GARDEN__!.setCamera({
+        azimuth: 1.35,
+        elevation: 0.5,
+        zoom: 1.15,
+        tx: -2.45,
+        tz: 1.88,
+      });
+    });
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${outDir}/mobile-close.png`, animations: "disabled" });
   });

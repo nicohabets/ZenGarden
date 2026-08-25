@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mulberry32 } from "./rng";
-import { GARDEN, type StoneState } from "./types";
+import { MOSS_FOOT, MOSS_VISUAL } from "./scenery";
+import { GARDEN, type MossState, type StoneState } from "./types";
 
 type Lithology = "granite" | "basalt";
 type Shape = "slab" | "standing" | "pebble" | "angular" | "boulder";
@@ -107,9 +108,9 @@ function deform(geo: THREE.BufferGeometry, variant: number, flattenY: number, ch
     v.fromBufferAttribute(pos, i);
     n.copy(v).normalize();
     const ridges =
-      0.045 * Math.sin(v.x * 2.2 + v.z * 1.5 + variant) +
-      0.028 * Math.cos(v.y * 2.4 + v.x * 1.8 + variant * 0.5) +
-      0.016 * Math.sin(v.x * 4.6 + v.z * 4.1 + variant * 1.3);
+      0.02 * Math.sin(v.x * 1.6 + v.z * 1.1 + variant) +
+      0.012 * Math.cos(v.y * 1.8 + v.x * 1.3 + variant * 0.5) +
+      0.007 * Math.sin(v.x * 3.1 + v.z * 2.8 + variant * 1.3);
     v.addScaledVector(n, ridges + chips * (rng() - 0.5));
     v.x *= stretchX;
     v.z *= stretchZ;
@@ -134,11 +135,11 @@ export function createStoneGeometry(variant: number): THREE.BufferGeometry {
 
   const shape = shapeOf(variant);
   let geo: THREE.BufferGeometry;
-  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 10, 5, 8), variant, 0.94, 0.03);
-  else if (shape === "standing") geo = deform(new THREE.DodecahedronGeometry(0.64, 3), variant, 1.36, 0.028);
-  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 28, 20), variant, 0.56, 0.022);
-  else if (shape === "angular") geo = deform(new THREE.DodecahedronGeometry(0.74, 3), variant, 0.82, 0.034);
-  else geo = deform(new THREE.IcosahedronGeometry(0.9, 3), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.028);
+  if (shape === "slab") geo = deform(new THREE.BoxGeometry(1.38, 0.34, 0.92, 16, 8, 12), variant, 0.94, 0.016);
+  else if (shape === "standing") geo = deform(new THREE.SphereGeometry(0.64, 64, 48), variant, 1.28, 0.008);
+  else if (shape === "pebble") geo = deform(new THREE.SphereGeometry(0.7, 64, 48), variant, 0.56, 0.007);
+  else if (shape === "angular") geo = deform(new THREE.SphereGeometry(0.74, 56, 42), variant, 0.82, 0.008);
+  else geo = deform(new THREE.SphereGeometry(0.86, 64, 48), variant, variant % 3 === 0 ? 0.64 : 0.8, 0.007);
 
   geo.userData.shared = true;
   geoCache.set(variant, geo);
@@ -163,7 +164,7 @@ function sharedMoss(): {
     metalness: 0,
     flatShading: false,
   });
-  mossGeo ??= new THREE.IcosahedronGeometry(0.16, 2);
+  mossGeo ??= new THREE.SphereGeometry(0.16, 18, 14);
   mossGeo.userData.shared = true;
   collarGeo ??= new THREE.SphereGeometry(0.42, 18, 12);
   collarGeo.userData.shared = true;
@@ -199,10 +200,27 @@ function addLichen(mesh: THREE.Mesh, state: StoneState): void {
   }
 }
 
-export function createStoneMesh(state: StoneState): THREE.Mesh {
+export function stoneOnMoss(state: StoneState, moss: MossState[]): boolean {
+  for (const m of moss) {
+    const dx = state.x - m.x;
+    const dz = state.z - m.z;
+    const rot = m.rotY;
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    const lx = dx * c + dz * s;
+    const lz = -dx * s + dz * c;
+    const rx = m.scale * MOSS_FOOT.x * MOSS_VISUAL;
+    const rz = m.scale * MOSS_FOOT.z * MOSS_VISUAL;
+    if ((lx * lx) / (rx * rx) + (lz * lz) / (rz * rz) < 1) return true;
+  }
+  return false;
+}
+
+export function createStoneMesh(state: StoneState, moss: MossState[] = []): THREE.Mesh {
   const geo = createStoneGeometry(state.variant);
   const shape = shapeOf(state.variant);
-  const litho = lithologyOf(state.variant);
+  // Pale granite on the mound reads as a grit chip. Keep those dark.
+  const litho = stoneOnMoss(state, moss) ? "basalt" : lithologyOf(state.variant);
   const tex = rockTexture(litho);
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
@@ -212,7 +230,7 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
     roughness: litho === "granite" ? 0.78 : 0.86,
     metalness: litho === "granite" ? 0.06 : 0.03,
     emissive: litho === "granite" ? 0x8a8278 : 0x5c5852,
-    emissiveIntensity: 0.62,
+    emissiveIntensity: 0.22,
     vertexColors: true,
     flatShading: false,
   });
@@ -225,6 +243,8 @@ export function createStoneMesh(state: StoneState): THREE.Mesh {
   mesh.userData.lithology = litho;
   addLichen(mesh, state);
   applyStoneTransform(mesh, state);
+  // A slab on the mound reads as the light rectangular grit chip.
+  if (shape === "slab" && stoneOnMoss(state, moss)) mesh.visible = false;
   return mesh;
 }
 
@@ -251,14 +271,14 @@ export class StoneField {
   readonly meshes = new Map<string, THREE.Mesh>();
   stones: StoneState[] = [];
 
-  load(states: StoneState[]): void {
+  load(states: StoneState[], moss: MossState[] = []): void {
     this.clear();
-    for (const s of states) this.add(s);
+    for (const s of states) this.add(s, moss);
   }
 
-  add(state: StoneState): THREE.Mesh {
+  add(state: StoneState, moss: MossState[] = []): THREE.Mesh {
     this.stones.push(state);
-    const mesh = createStoneMesh(state);
+    const mesh = createStoneMesh(state, moss);
     this.meshes.set(state.id, mesh);
     this.group.add(mesh);
     return mesh;

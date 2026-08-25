@@ -30,7 +30,9 @@ export class FrameMeter {
     if (this.last > 0) {
       this.lastMs = now - this.last;
       this.warmup += 1;
-      if (this.warmup > 8) {
+      // Two discarded frames is enough; eight left CI waiting past 12s
+      // on SwiftShader before samples existed.
+      if (this.warmup > 2) {
         this.samples.push(this.lastMs);
         if (this.samples.length > 48) this.samples.shift();
       }

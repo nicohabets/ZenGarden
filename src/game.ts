@@ -6,6 +6,7 @@ import { generateWorld, inBounds, nextStoneId } from "./generate";
 import { FrameMeter } from "./perf";
 import { loadSave, writeSave } from "./persistence";
 import { RakeGuide, type RakeIsland, type RakePiece } from "./rake";
+import { GrainCloud } from "./grains";
 import { SandField } from "./sand";
 import {
   createApron,
@@ -15,6 +16,9 @@ import {
   createGround,
   createLanterns,
   createMoss,
+  MOSS_FOOT,
+  MOSS_GRAIN_PAD,
+  MOSS_VISUAL,
   scatterGravel,
   updateLanterns,
   updateWater,
@@ -58,6 +62,7 @@ export class ZenGarden {
   private readonly cam = new CameraRig();
   private readonly ui = new GardenUI();
   private readonly sand: SandField;
+  private readonly grains: GrainCloud;
   private readonly rakeGuide = new RakeGuide();
   private readonly stones = new StoneField();
 
@@ -94,6 +99,7 @@ export class ZenGarden {
       canvas,
       antialias: wantHighQuality() || (!isMobileGarden() && !this.softwareGL),
       alpha: false,
+      stencil: true,
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(pixelRatioCap(this.softwareGL));
@@ -108,6 +114,7 @@ export class ZenGarden {
     this.scene.fog = new THREE.Fog(0xddd6c8, 24, 56);
 
     this.sand = new SandField();
+    this.grains = new GrainCloud();
     this.seed = freshSeed();
 
     this.lights();
@@ -116,6 +123,9 @@ export class ZenGarden {
     this.scene.add(createFrame());
     this.scene.add(createBackdrop());
     this.scene.add(this.sand.mesh);
+    this.grains.mesh.renderOrder = 2;
+    this.stones.group.renderOrder = 3;
+    this.scene.add(this.grains.mesh);
     this.scene.add(this.stones.group);
 
     this.bindUi();
@@ -165,6 +175,7 @@ export class ZenGarden {
     this.sand.settle(12);
     this.sand.flush();
     this.settleOccupants();
+    this.syncGrains(true);
     this.meter.plantMs = performance.now() - t0;
     this.ui.setSeed(seed);
   }
@@ -189,6 +200,7 @@ export class ZenGarden {
     this.cam.applyState(save.camera);
     this.sand.flush();
     this.settleOccupants();
+    this.syncGrains(true);
     this.ui.setSeed(save.seed);
   }
 
@@ -199,10 +211,11 @@ export class ZenGarden {
     if (this.gravelGroup) this.scene.remove(this.gravelGroup);
     if (this.lanternGroup) this.scene.remove(this.lanternGroup);
 
-    this.stones.load(stones.map((s) => ({ ...s })));
+    this.stones.load(stones.map((s) => ({ ...s })), this.mossStates);
     this.bonsai = new Bonsai(this.seed, this.bonsaiState, seasonFromBonsai(this.bonsaiState));
     this.scene.add(this.bonsai.group);
     this.mossGroup = createMoss(this.mossStates);
+    this.mossGroup.renderOrder = 1;
     this.scene.add(this.mossGroup);
     this.basinGroup = createBasin(this.basinState);
     this.scene.add(this.basinGroup);
@@ -213,16 +226,16 @@ export class ZenGarden {
   }
 
   private lights(): void {
-    const hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a8478, 0.92);
+    const hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a8478, 0.62);
     this.scene.add(hemi);
-    const fill = new THREE.AmbientLight(0xf2ebe0, 0.34);
+    const fill = new THREE.AmbientLight(0xf2ebe0, 0.12);
     this.scene.add(fill);
-    const bounce = new THREE.DirectionalLight(0xe8e4dc, 0.48);
+    const bounce = new THREE.DirectionalLight(0xe8e4dc, 0.28);
     bounce.position.set(-9.2, 6.4, -5.4);
     bounce.castShadow = false;
     this.scene.add(bounce);
-    const sun = new THREE.DirectionalLight(0xfff3e2, 1.18);
-    sun.position.set(16.8, 4.4, 7.2);
+    const sun = new THREE.DirectionalLight(0xfff3e2, 1.42);
+    sun.position.set(14.2, 3.2, 8.4);
     sun.castShadow = this.useShadows;
     if (this.useShadows) {
       sun.shadow.mapSize.set(1024, 1024);
@@ -459,7 +472,7 @@ export class ZenGarden {
       scale: 0.7 + Math.random() * 0.45,
       variant: Math.floor(Math.random() * 12),
     };
-    this.stones.add(state);
+    this.stones.add(state, this.mossStates);
     this.sand.bankObject(x, z, 0.28 + state.scale * 0.2, 0.016, 0.018);
     this.sand.queueSlump(3);
     this.scheduleSave(true);
@@ -469,7 +482,7 @@ export class ZenGarden {
   private occupants(): { x: number; z: number; r: number; pile?: number; sink?: number }[] {
     const list = [
       ...this.stones.stones.map((s) => ({ x: s.x, z: s.z, r: 0.28 + s.scale * 0.2 })),
-      ...this.mossStates.map((m) => ({ x: m.x, z: m.z, r: m.scale * 0.52, pile: 0.02, sink: 0.018 })),
+      ...this.mossStates.map((m) => ({ x: m.x, z: m.z, r: m.scale * 0.28, pile: 0.012, sink: 0.01 })),
       { x: this.basinState.x, z: this.basinState.z, r: 0.52 },
       { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.6 },
       ...this.lanternStates.map((l) => ({ x: l.x, z: l.z, r: 0.22 })),
@@ -481,7 +494,7 @@ export class ZenGarden {
     this.stones.settleToSand((x, z) => this.sand.sampleHeight(x, z));
     if (this.mossGroup) {
       for (const child of this.mossGroup.children) {
-        child.position.y = GARDEN.sandY + this.sand.sampleHeight(child.position.x, child.position.z) - 0.05;
+        child.position.y = GARDEN.sandY + this.sand.sampleHeight(child.position.x, child.position.z) - 0.02;
       }
     }
     if (this.bonsai) {
@@ -497,6 +510,7 @@ export class ZenGarden {
     }
   }
 
+  /** Rake keep-out. Moss stays here so tines do not carve the island. */
   private blockers(): Blocker[] {
     const list: Blocker[] = [
       { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.68 },
@@ -504,7 +518,31 @@ export class ZenGarden {
     ];
     for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.4 });
     for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.32 + s.scale * 0.18 });
-    for (const m of this.mossStates) list.push({ x: m.x, z: m.z, r: m.scale * 0.46 });
+    for (const m of this.mossStates) list.push({ x: m.x, z: m.z, r: m.scale * 0.72 });
+    return list;
+  }
+
+  /**
+   * Grain keep-out is the visible mound. Centers never sit on moss;
+   * grit is packed against that opaque edge so no beige shoreline shows.
+   */
+  private grainBlockers(): Blocker[] {
+    const list: Blocker[] = [
+      { x: this.bonsaiState.x, z: this.bonsaiState.z, r: 0.58 },
+      { x: this.basinState.x, z: this.basinState.z, r: 0.48 },
+    ];
+    for (const l of this.lanternStates) list.push({ x: l.x, z: l.z, r: 0.28 });
+    for (const s of this.stones.stones) list.push({ x: s.x, z: s.z, r: 0.22 + s.scale * 0.14 });
+    for (const m of this.mossStates) {
+      list.push({
+        x: m.x,
+        z: m.z,
+        r: m.scale * MOSS_FOOT.x * MOSS_VISUAL + MOSS_GRAIN_PAD,
+        rx: m.scale * MOSS_FOOT.x * MOSS_VISUAL + MOSS_GRAIN_PAD,
+        rz: m.scale * MOSS_FOOT.z * MOSS_VISUAL + MOSS_GRAIN_PAD,
+        rotY: m.rotY,
+      });
+    }
     return list;
   }
 
@@ -611,6 +649,7 @@ export class ZenGarden {
     this.sand.stepSlump(dt);
     if (this.sand.consumeOccupantSettle()) this.settleOccupants();
     this.sand.flush();
+    this.syncGrains();
     this.bonsai.update(performance.now(), this.clock.elapsedTime);
     if (this.basinGroup) updateWater(this.basinGroup, this.waterTime);
     if (this.lanternGroup) updateLanterns(this.lanternGroup, this.waterTime);
@@ -670,6 +709,7 @@ export class ZenGarden {
         this.scheduleSave(true);
       },
       getSandTone: () => this.sand.getSandTone(),
+      getGrainCount: () => this.grains.getCount(),
       getPerf: () => this.readPerf(),
       getMossCount: () => this.mossStates.length,
       getCamera: () => this.cam.toState(),
@@ -682,14 +722,20 @@ export class ZenGarden {
           tx: state.tx ?? cur.tx,
           tz: state.tz ?? cur.tz,
         });
+        this.syncGrains(true);
         this.scheduleSave(true);
       },
       dolly: (delta) => {
         this.cam.dolly(delta);
+        this.syncGrains();
         this.scheduleSave();
       },
     };
     window.__ZEN_GARDEN__ = api;
+  }
+
+  private syncGrains(force = false): void {
+    this.grains.sync(this.cam, this.sand, this.grainBlockers(), this.renderer.domElement.height, force);
   }
 
   private playRakeStroke(points: Array<[number, number]>): RakeMode {
