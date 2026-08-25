@@ -46,6 +46,9 @@ export class GrainCloud {
       roughness: 0.94,
       metalness: 0,
       envMapIntensity: 0,
+      stencilWrite: false,
+      stencilRef: 1,
+      stencilFunc: THREE.NotEqualStencilFunc,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
     this.mesh.frustumCulled = false;
@@ -54,7 +57,7 @@ export class GrainCloud {
     this.mesh.count = 0;
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
-    this.mesh.renderOrder = 0;
+    this.mesh.renderOrder = 2;
     this.mesh.userData.kind = "sand-grains";
   }
 

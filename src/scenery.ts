@@ -131,7 +131,7 @@ function islandGeometry(seed: number): THREE.BufferGeometry {
   const color = new THREE.Float32BufferAttribute(pos.count * 3, 3);
   const v = new THREE.Vector3();
   const moss = new THREE.Color(0x5a7840);
-  const mossLite = new THREE.Color(0x7a9a54);
+  const mossLite = new THREE.Color(0x65844a);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const n = v.clone().normalize();
@@ -184,7 +184,7 @@ function mossTexture(): THREE.CanvasTexture {
   for (let i = 0; i < 2200; i++) {
     const x = (i * 29 + 3) % size;
     const y = (i * 47 + 11) % size;
-    ctx.fillStyle = i % 5 === 0 ? "#3e5230" : i % 3 === 0 ? "#7a9258" : "#4e6838";
+    ctx.fillStyle = i % 5 === 0 ? "#3e5230" : i % 3 === 0 ? "#5a7044" : "#4e6838";
     ctx.fillRect(x, y, 1 + (i % 2), 1);
   }
   const tex = new THREE.CanvasTexture(canvas);
@@ -215,6 +215,10 @@ export function createMoss(states: MossState[]): THREE.Group {
     polygonOffset: true,
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,
+    stencilWrite: true,
+    stencilRef: 1,
+    stencilZPass: THREE.ReplaceStencilOp,
+    stencilFunc: THREE.AlwaysStencilFunc,
   });
   for (const s of states) {
     const seed = hashFromId(s.id);
@@ -227,7 +231,7 @@ export function createMoss(states: MossState[]): THREE.Group {
     const moss = new THREE.Mesh(islandGeometry(seed), mossMat);
     moss.scale.set(s.scale * MOSS_FOOT.x * MOSS_VISUAL, s.scale * 0.38, s.scale * MOSS_FOOT.z * MOSS_VISUAL);
     moss.position.y = 0.04;
-    moss.renderOrder = 2;
+    moss.renderOrder = 1;
     moss.receiveShadow = true;
     moss.castShadow = false;
     moss.userData.kind = "moss";
@@ -243,7 +247,7 @@ export function createMoss(states: MossState[]): THREE.Group {
         randRange(rng, -0.08, 0.08) * s.scale,
       );
       bump.rotation.y = rng() * Math.PI;
-      bump.renderOrder = 2;
+      bump.renderOrder = 1;
       bump.receiveShadow = true;
       bump.userData.kind = "moss";
       island.add(bump);

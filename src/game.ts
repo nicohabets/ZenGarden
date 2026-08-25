@@ -99,6 +99,7 @@ export class ZenGarden {
       canvas,
       antialias: wantHighQuality() || (!isMobileGarden() && !this.softwareGL),
       alpha: false,
+      stencil: true,
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(pixelRatioCap(this.softwareGL));
@@ -122,6 +123,8 @@ export class ZenGarden {
     this.scene.add(createFrame());
     this.scene.add(createBackdrop());
     this.scene.add(this.sand.mesh);
+    this.grains.mesh.renderOrder = 2;
+    this.stones.group.renderOrder = 3;
     this.scene.add(this.grains.mesh);
     this.scene.add(this.stones.group);
 
@@ -212,6 +215,7 @@ export class ZenGarden {
     this.bonsai = new Bonsai(this.seed, this.bonsaiState, seasonFromBonsai(this.bonsaiState));
     this.scene.add(this.bonsai.group);
     this.mossGroup = createMoss(this.mossStates);
+    this.mossGroup.renderOrder = 1;
     this.scene.add(this.mossGroup);
     this.basinGroup = createBasin(this.basinState);
     this.scene.add(this.basinGroup);
