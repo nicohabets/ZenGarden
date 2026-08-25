@@ -29,6 +29,11 @@ export function pixelRatioCap(software = false): number {
   return Math.min(dpr, 1.5);
 }
 
+/** Stencil-mask grit off moss. Skip on cheap headless GL; ?hq=1 keeps it. */
+export function wantMossStencil(): boolean {
+  return wantHighQuality() || !isSoftwareGL();
+}
+
 export function shadowsEnabled(software = false): boolean {
   if (software || isMobileGarden() || wantHighQuality()) return false;
   return true;

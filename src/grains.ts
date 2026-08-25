@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { CameraRig } from "./camera";
-import { isMobileGarden, wantHighQuality } from "./device";
+import { isMobileGarden, wantHighQuality, wantMossStencil } from "./device";
 import { SAND_HEIGHT_GAIN, type SandField } from "./sand";
 import { GARDEN, type Blocker } from "./types";
 
@@ -41,14 +41,15 @@ export class GrainCloud {
     this.layers = new Float32Array(this.maxCount);
 
     const geo = makeGritGeometry();
+    const stencil = wantMossStencil();
     const mat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       roughness: 0.94,
       metalness: 0,
       envMapIntensity: 0,
       stencilWrite: false,
-      stencilRef: 1,
-      stencilFunc: THREE.NotEqualStencilFunc,
+      stencilRef: stencil ? 1 : 0,
+      stencilFunc: stencil ? THREE.NotEqualStencilFunc : THREE.AlwaysStencilFunc,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.maxCount);
     this.mesh.frustumCulled = false;

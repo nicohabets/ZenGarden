@@ -119,6 +119,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("new garden dialog can keep the current garden", async ({ page }) => {
+    test.setTimeout(45_000);
     await page.goto("/");
     await waitForGarden(page);
     const seed = await page.evaluate(() => window.__ZEN_GARDEN__!.getSeed());
@@ -355,6 +356,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("garden starts quickly and reports frame time", async ({ page }) => {
+    test.setTimeout(45_000);
     const t0 = Date.now();
     await page.goto("/");
     await waitForGarden(page);

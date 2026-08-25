@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { wantMossStencil } from "./device";
 import { mulberry32, randRange } from "./rng";
 import { GARDEN, type BasinState, type LanternState, type MossState } from "./types";
 
@@ -201,6 +202,7 @@ let mossMap: THREE.CanvasTexture | null = null;
 export function createMoss(states: MossState[]): THREE.Group {
   const group = new THREE.Group();
   mossMap ??= mossTexture();
+  const stencil = wantMossStencil();
   const mossMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: mossMap,
@@ -215,9 +217,9 @@ export function createMoss(states: MossState[]): THREE.Group {
     polygonOffset: true,
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,
-    stencilWrite: true,
-    stencilRef: 1,
-    stencilZPass: THREE.ReplaceStencilOp,
+    stencilWrite: stencil,
+    stencilRef: stencil ? 1 : 0,
+    stencilZPass: stencil ? THREE.ReplaceStencilOp : THREE.KeepStencilOp,
     stencilFunc: THREE.AlwaysStencilFunc,
   });
   for (const s of states) {
