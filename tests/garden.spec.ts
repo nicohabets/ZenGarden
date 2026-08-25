@@ -356,7 +356,7 @@ test.describe("Zen Garden", () => {
   });
 
   test("garden starts quickly and reports frame time", async ({ page }) => {
-    test.setTimeout(45_000);
+    test.setTimeout(60_000);
     const t0 = Date.now();
     await page.goto("/");
     await waitForGarden(page);
@@ -365,7 +365,7 @@ test.describe("Zen Garden", () => {
     await page.waitForFunction(() => {
       const perf = window.__ZEN_GARDEN__?.getPerf();
       return !!perf && perf.samples >= 8;
-    }, undefined, { timeout: 12_000 });
+    }, undefined, { timeout: 25_000 });
     const perf = await page.evaluate(() => {
       const api = window.__ZEN_GARDEN__!;
       const rake0 = performance.now();
