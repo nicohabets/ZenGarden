@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mulberry32 } from "./rng";
-import { GARDEN, type StoneState } from "./types";
+import { MOSS_FOOT, MOSS_VISUAL } from "./scenery";
+import { GARDEN, type MossState, type StoneState } from "./types";
 
 type Lithology = "granite" | "basalt";
 type Shape = "slab" | "standing" | "pebble" | "angular" | "boulder";
@@ -199,10 +200,27 @@ function addLichen(mesh: THREE.Mesh, state: StoneState): void {
   }
 }
 
-export function createStoneMesh(state: StoneState): THREE.Mesh {
+export function stoneOnMoss(state: StoneState, moss: MossState[]): boolean {
+  for (const m of moss) {
+    const dx = state.x - m.x;
+    const dz = state.z - m.z;
+    const rot = m.rotY;
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    const lx = dx * c + dz * s;
+    const lz = -dx * s + dz * c;
+    const rx = m.scale * MOSS_FOOT.x * MOSS_VISUAL;
+    const rz = m.scale * MOSS_FOOT.z * MOSS_VISUAL;
+    if ((lx * lx) / (rx * rx) + (lz * lz) / (rz * rz) < 1) return true;
+  }
+  return false;
+}
+
+export function createStoneMesh(state: StoneState, moss: MossState[] = []): THREE.Mesh {
   const geo = createStoneGeometry(state.variant);
   const shape = shapeOf(state.variant);
-  const litho = lithologyOf(state.variant);
+  // Pale granite on the mound reads as a grit chip. Keep those dark.
+  const litho = stoneOnMoss(state, moss) ? "basalt" : lithologyOf(state.variant);
   const tex = rockTexture(litho);
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
@@ -251,14 +269,14 @@ export class StoneField {
   readonly meshes = new Map<string, THREE.Mesh>();
   stones: StoneState[] = [];
 
-  load(states: StoneState[]): void {
+  load(states: StoneState[], moss: MossState[] = []): void {
     this.clear();
-    for (const s of states) this.add(s);
+    for (const s of states) this.add(s, moss);
   }
 
-  add(state: StoneState): THREE.Mesh {
+  add(state: StoneState, moss: MossState[] = []): THREE.Mesh {
     this.stones.push(state);
-    const mesh = createStoneMesh(state);
+    const mesh = createStoneMesh(state, moss);
     this.meshes.set(state.id, mesh);
     this.group.add(mesh);
     return mesh;

@@ -211,7 +211,7 @@ export class ZenGarden {
     if (this.gravelGroup) this.scene.remove(this.gravelGroup);
     if (this.lanternGroup) this.scene.remove(this.lanternGroup);
 
-    this.stones.load(stones.map((s) => ({ ...s })));
+    this.stones.load(stones.map((s) => ({ ...s })), this.mossStates);
     this.bonsai = new Bonsai(this.seed, this.bonsaiState, seasonFromBonsai(this.bonsaiState));
     this.scene.add(this.bonsai.group);
     this.mossGroup = createMoss(this.mossStates);
@@ -472,7 +472,7 @@ export class ZenGarden {
       scale: 0.7 + Math.random() * 0.45,
       variant: Math.floor(Math.random() * 12),
     };
-    this.stones.add(state);
+    this.stones.add(state, this.mossStates);
     this.sand.bankObject(x, z, 0.28 + state.scale * 0.2, 0.016, 0.018);
     this.sand.queueSlump(3);
     this.scheduleSave(true);
